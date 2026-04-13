@@ -70,6 +70,9 @@ def create_app() -> FastAPI:
         @app.get("/", include_in_schema=False)
         @app.get("/{path:path}", include_in_schema=False)
         async def serve_ui(path: str = ""):
+            file = ui_dist / path
+            if file.exists() and file.is_file():
+                return FileResponse(file)
             return FileResponse(ui_dist / "index.html")
 
     return app
