@@ -51,7 +51,7 @@ export function Dashboard({ health, agentsData, serversData }) {
                                 {agent.background && <Tag color="var(--orange)">bg</Tag>}
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-                                <span style={{ fontFamily: "Menlo, Consolas, monospace", color: "var(--text2)" }}>{agent.total_tools}t · {agent.servers?.length || 0}s</span>
+                                <span style={{ fontFamily: "Menlo, Consolas, monospace", color: "var(--text2)" }}>{agent.total_tools}tools · {agent.servers?.length || 0}servers</span>
                                 {agent.policy_engine ? <Tag color="var(--lime-dim)">{agent.policy_engine}</Tag> : <Tag>no policy</Tag>}
                             </div>
                         </div>
