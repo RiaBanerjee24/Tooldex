@@ -1,0 +1,80 @@
+"""GET /api/policy/matrix, GET /api/policy/engines, GET /api/policy/engines/{id}/raw"""
+from pathlib import Path
+from fastapi import APIRouter, HTTPException
+from perimeter.core.parser import get_parser
+
+router = APIRouter()
+
+
+@router.get("/policy/matrix")
+async def policy_matrix():
+    manifest = get_parser().manifest
+    tools = manifest.all_tools()
+    matrix = {}
+    for agent in manifest.agents:
+        agent_tools = {}
+        for tool_name in tools:
+            tool = manifest.agent_tool_access(agent.id, tool_name)
+            if tool is None:
+                agent_tools[tool_name] = {
+                    "effective_access": "not_configured",
+                    "access": None,
+                    "risk": None,
+                    "permissions": [],
+                    "denied_by": None,
+                }
+            else:
+                agent_tools[tool_name] = {
+                    "effective_access": tool.effective_access(),
+                    "access": tool.access,
+                    "risk": tool.risk,
+                    "permissions": [p.model_dump() for p in tool.permissions],
+                    "denied_by": tool.denied_by,
+                }
+        matrix[agent.id] = {
+            "agent_name": agent.name,
+            "policy_engine": agent.policy_engine,
+            "tools": agent_tools,
+        }
+    return {
+        "matrix": matrix,
+        "tools": tools,
+        "agents": [{"id": a.id, "name": a.name} for a in manifest.agents],
+    }
+
+
+@router.get("/policy/engines")
+async def list_engines():
+    manifest = get_parser().manifest
+    return {
+        "engines": [pe.model_dump() for pe in manifest.policy_engines],
+        "total": len(manifest.policy_engines),
+    }
+
+
+@router.get("/policy/engines/{engine_id}/raw")
+async def get_raw_policy(engine_id: str):
+    manifest = get_parser().manifest
+    pe = manifest.get_policy_engine(engine_id)
+    if not pe:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": f"Policy engine '{engine_id}' not found",
+                "available": [e.id for e in manifest.policy_engines],
+            }
+        )
+    if pe.type != "file":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Engine '{engine_id}' is type='{pe.type}'. Only type='file' supports raw content."
+        )
+    path = Path(pe.source)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Policy file not found: {pe.source}")
+    return {
+        "engine_id": engine_id,
+        "engine": pe.engine,
+        "source": pe.source,
+        "content": path.read_text(),
+    }

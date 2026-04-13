@@ -1,0 +1,64 @@
+# Perimeter
+
+**AI Agent Permission Observatory** — Swagger for your AI agents.
+
+Write a `perimeter.yml` describing your agents and their permissions. Run `perimeter serve`. Open your browser.
+
+## Install
+
+```bash
+pip install perimeter-agent
+```
+
+## Usage
+
+```bash
+# 1. write your perimeter.yml (see example below)
+# 2. start perimeter
+perimeter serve
+
+# custom config path or port
+perimeter serve --config ./path/to/perimeter.yml --port 8282
+```
+
+Open `http://localhost:8282/` — that's it.
+
+## perimeter.yml
+
+```yaml
+perimeter: "0.1.0"
+
+metadata:
+  name: "My Agent System"
+
+servers:
+  - id: my-db
+    name: "My Database"
+    transport: stdio
+    command: npx
+    args: ["-y", "@benborla29/mcp-server-mysql"]
+
+agents:
+  - id: read-agent
+    name: "ReadAgent"
+    servers:
+      - ref: my-db
+        tools:
+          - name: mysql_query
+            risk: medium
+            permissions:
+              - operations: [SELECT]
+                on: "*"
+                access: allowed
+
+observatory:
+  audit_log: ./logs/audit.log
+```
+
+## What you see
+
+- **Overview** — all agents, servers, and policy engines at a glance
+- **Agents** — click any agent to see its full permission detail
+- **Servers** — click any server to see which agents connect and what they can do
+- **Access Matrix** — agent × tool grid showing allowed / denied / partial
+- **Audit Log** — live stream of every tool call your agents make
