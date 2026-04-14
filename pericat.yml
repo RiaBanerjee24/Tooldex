@@ -1,13 +1,13 @@
-perimeter: "0.1.0"                  # REQUIRED
+pericat: "0.1.0"                  # REQUIRED
 
 metadata:                           # REQUIRED
   name: "My Agent System"           # REQUIRED
-  description: "Example perimeter.yml — edit this to match your agents"  # OPTIONAL
+  description: "Example pericat.yml — edit this to match your agents"  # OPTIONAL
   owner: "your-team"                # OPTIONAL
   updated: "2026-03-09"             # OPTIONAL
 
 # Policy engines — declare what enforces your agent permissions.
-# Perimeter reads these for display only. It does NOT query them at runtime.
+# Pericat reads these for display only. It does NOT query them at runtime.
 # Remove this section entirely if you have no external policy engine.
 policy_engines:                     # OPTIONAL (entire section)
   - id: main-policy                 # REQUIRED

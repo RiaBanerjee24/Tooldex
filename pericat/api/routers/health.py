@@ -1,6 +1,6 @@
 """GET /api/health"""
 from fastapi import APIRouter
-from perimeter.core.parser import get_parser
+from pericat.core.parser import get_parser
 
 router = APIRouter()
 
@@ -11,7 +11,7 @@ async def health():
     warnings = parser.validate_references()
     return {
         "status": "degraded" if warnings else "ok",
-        "perimeter": "0.1.0",
+        "pericat": "0.1.0",
         "config": {
             "name": manifest.metadata.name,
             "description": manifest.metadata.description,

@@ -1,5 +1,5 @@
 /**
- * api.js — all fetch calls to the Perimeter backend in one place.
+ * api.js — all fetch calls to the Pericat backend in one place.
  * Base URL is empty — works both in dev (Vite proxies /api → :8282)
  * and in production (FastAPI serves everything on same port).
  */

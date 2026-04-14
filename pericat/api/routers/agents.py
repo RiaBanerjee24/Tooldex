@@ -1,6 +1,6 @@
 """GET /api/agents, GET /api/agents/{id}"""
 from fastapi import APIRouter, HTTPException
-from perimeter.core.parser import get_parser
+from pericat.core.parser import get_parser
 
 router = APIRouter()
 
@@ -43,7 +43,7 @@ async def get_agent(agent_id: str):
         raise HTTPException(
             status_code=404,
             detail={
-                "error": f"Agent '{agent_id}' not found in perimeter.yml",
+                "error": f"Agent '{agent_id}' not found in pericat.yml",
                 "available": [a.id for a in manifest.agents],
             }
         )

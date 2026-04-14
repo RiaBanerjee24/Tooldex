@@ -1,5 +1,5 @@
 """
-perimeter/api/app.py
+pericat/api/app.py
 FastAPI application factory.
 Registers all routers and serves the pre-built React UI.
 """
@@ -13,26 +13,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from perimeter.core.parser import get_parser
-from perimeter.api.routers import health, agents, servers, policy
-from perimeter import settings
+from pericat.core.parser import get_parser
+from pericat.api.routers import health, agents, servers, policy
+from pericat import settings
 
-logger = logging.getLogger("perimeter.api")
+logger = logging.getLogger("pericat.api")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # start watching perimeter.yml for changes in the background
+    # start watching pericat.yml for changes in the background
     watch_task = asyncio.create_task(get_parser().watch())
-    logger.info("Perimeter started")
+    logger.info("Pericat started")
     yield
     watch_task.cancel()
-    logger.info("Perimeter stopped")   
+    logger.info("Pericat stopped")   
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Perimeter",
+        title="Pericat",
         description="AI Agent Permission Observatory",
         version="0.1.0",
         docs_url="/api/docs" if settings.debug else None,

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "perimeter"
+name = "pericat"
 version = "0.1.0"
 description = "AI Agent Permission Observatory"
 readme = "README.md"
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-perimeter = "perimeter.cli:main"
+pericat = "pericat.cli:main"
 
 [tool.hatch.build.targets.wheel]
-include = ["perimeter/**"]
+include = ["pericat/**"]

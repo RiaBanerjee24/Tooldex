@@ -6,7 +6,6 @@ __pycache__/
 .Python
 *.egg
 *.egg-info/
-dist/
 build/
 .eggs/
 pip-wheel-metadata/
@@ -24,13 +23,12 @@ ENV/
 
 # Node
 node_modules/
-perimeter/ui/node_modules/
+pericat/ui/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
 # Vite / frontend build
-ui/dist/
 ui/.vite/
 
 # Logs

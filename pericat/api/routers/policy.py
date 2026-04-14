@@ -1,7 +1,7 @@
 """GET /api/policy/matrix, GET /api/policy/engines, GET /api/policy/engines/{id}/raw"""
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
-from perimeter.core.parser import get_parser
+from pericat.core.parser import get_parser
 
 router = APIRouter()
 
