@@ -115,10 +115,10 @@ export function SidebarBtn({ active, onClick, children }) {
         <button onClick={onClick} style={{
             display: "block", width: "100%", padding: "10px 13px",
             borderRadius: "var(--radius)", border: "1px solid",
-            borderColor: active ? "var(--accent-border)" : "var(--border)",
-            background: active ? "var(--accent-bg)" : "transparent",
+            borderColor: active ? "var(--border3)" : "var(--border)",
+            background: active ? "var(--surface3)" : "transparent",
             textAlign: "left", transition: "all 0.12s",
-            borderLeft: active ? "2px solid var(--accent-mid)" : "1px solid var(--border)",
+            borderLeft: active ? "3px solid var(--lime-dim)" : "1px solid var(--border)",
         }}>{children}</button>
     )
 }
