@@ -1,8 +1,8 @@
 """
-perimeter/core/models.py
+pericat/core/models.py
 
-Pydantic models mapping directly to perimeter.yml.
-perimeter.yml is the single source of truth — no policy engine assumptions.
+Pydantic models mapping directly to pericat.yml.
+pericat.yml is the single source of truth — no policy engine assumptions.
 """
 from __future__ import annotations
 from typing import Literal, Optional
@@ -111,16 +111,16 @@ class Observatory(BaseModel):
     changes_log: str = "./logs/changes.txt"
 
 
-class PerimeterMetadata(BaseModel):
+class PericatMetadata(BaseModel):
     name: str
     description: Optional[str] = None
     owner: Optional[str] = None
     updated: Optional[str] = None
 
 
-class PerimeterManifest(BaseModel):
-    perimeter: str = Field(default="0.1.0")
-    metadata: PerimeterMetadata
+class PericatManifest(BaseModel):
+    pericat: str = Field(default="0.1.0")
+    metadata: PericatMetadata
     policy_engines: list[PolicyEngine] = []
     servers: list[MCPServer] = []
     agents: list[Agent] = []

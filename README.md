@@ -1,32 +1,32 @@
-# Perimeter
+# Pericat
 
 **AI Agent Permission Observatory** — Swagger for your AI agents.
 
-Write a `perimeter.yml` describing your agents and their permissions. Run `perimeter serve`. Open your browser.
+Write a `pericat.yml` describing your agents and their permissions. Run `pericat serve`. Open your browser.
 
 ## Install
 
 ```bash
-pip install perimeter-agent
+pip install pericat-agent
 ```
 
 ## Usage
 
 ```bash
-# 1. write your perimeter.yml (see example below)
-# 2. start perimeter
-perimeter serve
+# 1. write your pericat.yml (see example below)
+# 2. start pericat
+pericat serve
 
 # custom config path or port
-perimeter serve --config ./path/to/perimeter.yml --port 8282
+pericat serve --config ./path/to/pericat.yml --port 8282
 ```
 
 Open `http://localhost:8282/` — that's it.
 
-## perimeter.yml
+## pericat.yml
 
 ```yaml
-perimeter: "0.1.0"
+pericat: "0.1.0"
 
 metadata:
   name: "My Agent System"

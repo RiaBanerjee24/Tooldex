@@ -1,6 +1,6 @@
 """
-perimeter/cli.py
-The `perimeter serve` command — the only thing a developer needs to run.
+pericat/cli.py
+The `pericat serve` command — the only thing a developer needs to run.
 """
 import logging
 import uvicorn
@@ -12,7 +12,7 @@ logging.basicConfig(
 )
 
 cli = typer.Typer(
-    help="Perimeter — AI Agent Permission Observatory",
+    help="Pericat — AI Agent Permission Observatory",
     no_args_is_help=True,
 )
 
@@ -25,8 +25,8 @@ def callback():
 @cli.command()
 def serve(
     config: str = typer.Option(
-        "./perimeter.yml", "--config", "-c",
-        help="Path to your perimeter.yml file"
+        "./pericat.yml", "--config", "-c",
+        help="Path to your pericat.yml file"
     ),
     port: int = typer.Option(
         8282, "--port", "-p",
@@ -37,11 +37,11 @@ def serve(
         help="Host to bind to"
     ),
 ):
-    """Start the Perimeter Observatory server."""
-    from perimeter.core.parser import init_parser
-    from perimeter.api.app import create_app
+    """Start the Pericat Observatory server."""
+    from pericat.core.parser import init_parser
+    from pericat.api.app import create_app
 
-    # load and validate perimeter.yml before starting the server
+    # load and validate pericat.yml before starting the server
     try:
         parser = init_parser(config)
         manifest = parser.manifest

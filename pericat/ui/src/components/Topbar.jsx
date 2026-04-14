@@ -24,7 +24,7 @@ export function Topbar({ tab, setTab, health }) {
                             <line x1="10" y1="14.5" x2="6.8" y2="16.2" stroke="#BED754" strokeWidth="0.7" opacity="0.4" />
                         </svg>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
-                            <span style={{ fontFamily: "Georgia, serif", fontWeight: 500, fontSize: 18, color: "var(--cream)", letterSpacing: "-0.01em" }}>Perimeter</span>
+                            <span style={{ fontFamily: "Georgia, serif", fontWeight: 500, fontSize: 18, color: "var(--cream)", letterSpacing: "-0.01em" }}>Pericat</span>
                             <span style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 10, color: "var(--lime-dim)", letterSpacing: "0.04em" }}>v0.1.0</span>
                         </div>
                     </div>
