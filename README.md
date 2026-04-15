@@ -62,3 +62,6 @@ observatory:
 - **Servers** — click any server to see which agents connect and what they can do
 - **Access Matrix** — agent × tool grid showing allowed / denied / partial
 - **Audit Log** — live stream of every tool call your agents make
+
+## Credits 
+cat face by corpus delicti from <a href="https://thenounproject.com/browse/icons/term/cat-face/" target="_blank" title="cat face Icons">Noun Project</a> (CC BY 3.0)
