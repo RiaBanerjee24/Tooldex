@@ -1,6 +1,6 @@
 """GET /api/agents, GET /api/agents/{id}"""
 from fastapi import APIRouter, HTTPException
-from pericat.core.parser import get_parser
+from pericat.core.parsers.parser import get_parser
 
 router = APIRouter()
 

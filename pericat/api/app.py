@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from pericat.core.parser import get_parser
+from pericat.core.parsers.parser import get_parser
 from pericat.api.routers import health, agents, servers, policy
 from pericat import settings
 

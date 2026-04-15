@@ -38,7 +38,7 @@ def serve(
     ),
 ):
     """Start the Pericat Observatory server."""
-    from pericat.core.parser import init_parser
+    from pericat.core.parsers.parser import init_parser
     from pericat.api.app import create_app
 
     # load and validate pericat.yml before starting the server

@@ -1,6 +1,6 @@
 """GET /api/health"""
 from fastapi import APIRouter
-from pericat.core.parser import get_parser
+from pericat.core.parsers.parser import get_parser
 
 router = APIRouter()
 
