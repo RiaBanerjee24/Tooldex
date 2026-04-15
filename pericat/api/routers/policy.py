@@ -22,6 +22,7 @@ async def policy_matrix():
                     "risk": None,
                     "permissions": [],
                     "denied_by": None,
+                    
                 }
             else:
                 agent_tools[tool_name] = {

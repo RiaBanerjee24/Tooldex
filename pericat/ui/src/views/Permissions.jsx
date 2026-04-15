@@ -56,7 +56,23 @@ export function Permissions() {
                             return (
                                 <tr key={id} style={{ background: ai % 2 === 0 ? "var(--surface)" : "var(--surface2)" }}>
                                     <td style={{ padding: "11px 18px", borderBottom: "1px solid var(--border)", borderRight: "2px solid var(--border2)", position: "sticky", left: 0, zIndex: 1, background: ai % 2 === 0 ? "var(--surface)" : "var(--surface2)" }}>
+                                        {/* <div style={{ fontWeight: 500, fontSize: 13, color: "var(--cream)" }}>{row.agent_name}</div> */}
                                         <div style={{ fontWeight: 500, fontSize: 13, color: "var(--cream)" }}>{row.agent_name}</div>
+                                        {row.status && (
+                                            <span style={{
+                                                fontSize: 9, fontFamily: "Menlo, Consolas, monospace", fontWeight: 600,
+                                                letterSpacing: "0.08em", textTransform: "uppercase",
+                                                padding: "1px 7px", borderRadius: 3,
+                                                border: `1px solid ${row.status === "active" ? "var(--lime-border)" :
+                                                    row.status === "deprecated" ? "#4a4a4a" :
+                                                        "var(--accent-border)"
+                                                    }`,
+                                                color:
+                                                    row.status === "active" ? "var(--lime)" :
+                                                        row.status === "deprecated" ? "#6a6a6a" :
+                                                            "var(--text3)",
+                                            }}>{row.status}</span>
+                                        )}
                                         {row.policy_engine && <div style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 10, color: "var(--lime-dim)", marginTop: 2 }}>{row.policy_engine}</div>}
                                     </td>
                                     {tools.map(tool => {

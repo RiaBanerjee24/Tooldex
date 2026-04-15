@@ -38,7 +38,7 @@ export function Topbar({ tab, setTab, health }) {
                                 color: tab === t ? "var(--cream)" : "var(--text3)",
                                 fontWeight: tab === t ? 600 : 400, fontSize: 13,
                                 fontFamily: "var(--font-body)",
-                                borderBottom: tab === t ? "2px solid var(--accent-mid)" : "2px solid transparent",
+                                borderBottom: tab === t ? "2px solid var(--border2)" : "2px solid transparent",
                                 transition: "all 0.12s",
                             }}>{t}</button>
                         ))}

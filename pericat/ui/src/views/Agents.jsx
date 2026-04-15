@@ -50,6 +50,23 @@ function AgentDetail({ agent }) {
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                                 <Dot on={agent.status === "active"} />
                                 <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 26, color: "var(--cream)" }}>{agent.name}</h2>
+                                {/* status pill */}
+                                <span style={{
+                                    fontSize: 10, fontFamily: "Menlo, Consolas, monospace", fontWeight: 600,
+                                    letterSpacing: "0.08em", textTransform: "uppercase",
+                                    padding: "2px 9px", borderRadius: 3,
+                                    background: "transparent",
+                                    border: `1px solid ${agent.status === "active" ? "var(--lime-border)" :
+                                        agent.status === "deprecated" ? "#4a4a4a" :
+                                            "var(--accent-border)"
+                                        }`,
+                                    color:
+                                        agent.status === "active" ? "var(--lime)" :
+                                            agent.status === "deprecated" ? "#6a6a6a" :
+                                                "var(--text3)",
+                                }}>{agent.status}</span>
+
+
                                 {agent.background && <Tag color="var(--orange)">background worker</Tag>}
                             </div>
                             <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>{agent.description}</p>

@@ -52,7 +52,7 @@ export function Card({ children, style, highlight }) {
     return (
         <div style={{
             background: "var(--surface)",
-            border: `1px solid ${highlight ? "var(--accent-border)" : "var(--border)"}`,
+            border: `1px solid ${highlight ? "var(--yellow-muted)" : "var(--border)"}`,
             borderRadius: "var(--radius-lg)",
             boxShadow: highlight ? "var(--shadow-accent)" : "var(--shadow)",
             overflow: "hidden", ...style,
@@ -115,10 +115,10 @@ export function SidebarBtn({ active, onClick, children }) {
         <button onClick={onClick} style={{
             display: "block", width: "100%", padding: "10px 13px",
             borderRadius: "var(--radius)", border: "1px solid",
-            borderColor: active ? "var(--border3)" : "var(--border)",
+            borderColor: active ? "var(--border2)" : "var(--border)",
             background: active ? "var(--surface3)" : "transparent",
             textAlign: "left", transition: "all 0.12s",
-            borderLeft: active ? "3px solid var(--lime-dim)" : "1px solid var(--border)",
+            borderLeft: active ? "3px solid var(--border3)" : "1px solid var(--border)",
         }}>{children}</button>
     )
 }
