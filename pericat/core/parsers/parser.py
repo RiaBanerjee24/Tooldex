@@ -16,7 +16,6 @@ All heavy lifting is delegated to:
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import Callable, Optional
@@ -27,6 +26,7 @@ from pericat.core.models import (
     PericatManifest,
     PericatMetadata,
     PolicyEngine,
+    Tool,
 )
 from pericat.core.parsers.loader import load_all_included_files, read_yaml
 from pericat.core.parsers.merger import merge
@@ -164,38 +164,69 @@ class PericatParser:
 
     # ── private ───────────────────────────────────────────────────────────────
 
+    def _assert_dict_format(self, raw: dict, key: str):
+        """
+        Validates that a top-level key, if present, is a dict (docker-compose
+        style) and not a list (old pericat format).
+
+        Raises a clear ValueError pointing at the user's file — not at Pericat.
+        """
+        value = raw.get(key)
+        if value is None:
+            return  # key not present — fine, it's optional
+        if isinstance(value, list):
+            raise ValueError(
+                f"\n\n  Configuration error in: {self.config_path}\n\n"
+                f"  '{key}' must use the dict format (id as key), not a list.\n\n"
+                f"  Old format (not supported):\n"
+                f"    {key}:\n"
+                f"      - id: my-{key[:-1]}\n"
+                f"        ...\n\n"
+                f"  New format:\n"
+                f"    {key}:\n"
+                f"      my-{key[:-1]}:\n"
+                f"        ...\n\n"
+                f"  See the migration guide: https://docs.pericat.dev/migration\n"
+            )
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"\n\n  Configuration error in: {self.config_path}\n\n"
+                f"  '{key}' must be a mapping (dict), "
+                f"got {type(value).__name__}.\n"
+            )
+
     def _build(self, raw: dict) -> PericatManifest:
         root_dir = self.config_path.parent
- 
+
         # ── validate top-level shapes before touching them ────────────────────
         # Gives the user a clear message if they're using the old list format
         # instead of blaming Pericat internals.
         self._assert_dict_format(raw, "policy_engines")
         self._assert_dict_format(raw, "agents")
         self._assert_dict_format(raw, "servers")
- 
+
         # ── global config (root only) ─────────────────────────────────────────
         metadata = PericatMetadata(**raw.get("metadata", {"name": "Pericat"}))
         observatory = Observatory(**raw.get("observatory", {}))
- 
+
         policy_engines: dict[str, PolicyEngine] = {
             eid: parse_policy_engine(eid, engine_raw)
             for eid, engine_raw in raw.get("policy_engines", {}).items()
         }
- 
+
         # ── root inline entities ──────────────────────────────────────────────
         root_path_str = str(self.config_path)
- 
+
         root_agents = {
             aid: parse_agent(aid, agent_raw, root_path_str)
             for aid, agent_raw in raw.get("agents", {}).items()
         }
- 
+
         root_servers = {
             sid: parse_server(sid, server_raw)
             for sid, server_raw in raw.get("servers", {}).items()
         }
- 
+
         # ── load included files ───────────────────────────────────────────────
         include_patterns: list[str] = raw.get("include") or []
         included_files, loaded_paths = load_all_included_files(
@@ -203,7 +234,7 @@ class PericatParser:
             root_dir=root_dir,
             root_path=self.config_path,
         )
- 
+
         # ── merge ─────────────────────────────────────────────────────────────
         merged_agents, merged_servers, errors, warnings = merge(
             root_agents=root_agents,
@@ -211,26 +242,55 @@ class PericatParser:
             root_file=root_path_str,
             included=included_files,
         )
- 
-        # ── derived: tool list ────────────────────────────────────────────────
-        computed_tools = sorted({
-            tool.name
-            for agent in merged_agents.values()
-            for srv in agent.servers
-            for tool in srv.tools
-        })
- 
+
         # ── orchestration analysis (skip conflicted agents) ───────────────────
         conflicted_agent_ids = {
             e.id for e in errors if e.entity_type == "agent"
         }
+        conflicted_server_ids = {
+            e.id for e in errors if e.entity_type == "server"
+        }
+        warned_agent_ids = {
+            w.id for w in warnings if w.entity_type == "agent"
+        }
+        warned_server_ids = {
+            w.id for w in warnings if w.entity_type == "server"
+        }
+
         analysable = {
             aid: a
             for aid, a in merged_agents.items()
             if aid not in conflicted_agent_ids
         }
         orch_issues = analyse(analysable)
- 
+
+        # ── single pass: build all indexes + tool list ────────────────────────
+        # One loop over all agents computes:
+        #   - all_tools         (sorted unique tool names)
+        #   - agent_tool_index  (agent_id → {tool_name → Tool})
+        #   - server_agents_index (server_id → [{"id", "name"}])
+        all_tools_set: set[str] = set()
+        agent_tool_index: dict[str, dict[str, Tool]] = {}
+        server_agents_index: dict[str, list[dict]] = {}
+
+        for agent_id, agent in merged_agents.items():
+            tool_map: dict[str, Tool] = {}
+            for srv_ref in agent.servers:
+                # server_agents_index
+                server_agents_index.setdefault(srv_ref.ref, []).append({
+                    "id": agent_id,
+                    "name": agent.name,
+                })
+                # agent_tool_index + all_tools
+                for tool in srv_ref.tools:
+                    all_tools_set.add(tool.name)
+                    # last-write wins if same tool name appears in
+                    # multiple server refs — consistent with old behaviour
+                    tool_map[tool.name] = tool
+            agent_tool_index[agent_id] = tool_map
+
+        computed_tools = sorted(all_tools_set)
+
         # ── assemble manifest ─────────────────────────────────────────────────
         manifest = PericatManifest(
             pericat=raw.get("pericat", "0.1.0"),
@@ -244,8 +304,14 @@ class PericatParser:
             conflict_warnings=warnings,
             orchestration_issues=orch_issues,
             all_tools=computed_tools,
+            agent_tool_index=agent_tool_index,
+            server_agents_index=server_agents_index,
         )
         manifest._loaded_files = loaded_paths
+        manifest._conflicted_agent_ids = conflicted_agent_ids
+        manifest._conflicted_server_ids = conflicted_server_ids
+        manifest._warned_agent_ids = warned_agent_ids
+        manifest._warned_server_ids = warned_server_ids
         return manifest
 
 

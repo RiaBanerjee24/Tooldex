@@ -2,7 +2,7 @@
 
 **AI Agent Permission Observatory** — Swagger for your AI agents.
 
-Write a `pericat.yml` describing your agents and their permissions. Run `pericat serve`. Open your browser.
+Write a `pericat.yml` describing your agents and their permissions. Run `pericat run`. Open your browser.
 
 ## Install
 
@@ -15,10 +15,10 @@ pip install pericat-agent
 ```bash
 # 1. write your pericat.yml (see example below)
 # 2. start pericat
-pericat serve
+pericat run
 
 # custom config path or port
-pericat serve --config ./path/to/pericat.yml --port 8282
+pericat run --config ./path/to/pericat.yml --port 8282
 ```
 
 Open `http://localhost:8282/` — that's it.
