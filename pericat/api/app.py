@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 
 from pericat.core.parsers.parser import get_parser
 from pericat.api.routers import health, agents, servers, policy
-from pericat import settings
+from pericat import settings, version
 
 logger = logging.getLogger("pericat.api")
 
@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Pericat",
         description="AI Agent Permission Observatory",
-        version="0.1.0",
+        version=version,
         docs_url="/api/docs" if settings.debug else None,
         redoc_url="/api/redoc" if settings.debug else None,
         openapi_url="/api/openapi.json" if settings.debug else None,

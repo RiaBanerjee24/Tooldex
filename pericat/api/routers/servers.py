@@ -19,6 +19,7 @@ async def list_servers():
             **server.model_dump(),
             "agents_connected": agents_connected,
             "agent_count": len(agents_connected),
+            "discovered_tool_count": len(server.discovered_tools),
             "_conflicted": server_id in conflicted,
             "_warned": server_id in warned,
         })
