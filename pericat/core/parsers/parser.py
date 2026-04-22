@@ -336,3 +336,24 @@ def init_parser(config_path: str) -> PericatParser:
     _parser = PericatParser(config_path)
     _parser.load()
     return _parser
+
+
+def init_parser_from_manifest(manifest: PericatManifest) -> PericatParser:
+    """
+    Install a pre-built manifest into the parser singleton.
+
+    Used by `pericat discover`: discovery builds a manifest directly (no
+    YAML involved), then hands it here so the API routers can serve it
+    through the existing get_parser() → manifest pipeline.
+
+    The returned parser has no config_path in the usual sense — `.load()`
+    and `.reload()` would fail, which is intentional. Discovery-mode
+    manifests aren't hot-reloaded the way YAML manifests are; re-running
+    `pericat discover` is the way to refresh.
+    """
+    global _parser
+    _parser = PericatParser.__new__(PericatParser)
+    _parser.config_path = None                           # sentinel: no YAML origin
+    _parser._manifest = manifest
+    _parser._reload_callbacks = []
+    return _parser
