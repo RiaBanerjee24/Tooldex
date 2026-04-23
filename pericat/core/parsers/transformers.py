@@ -6,20 +6,13 @@ No file I/O. No glob resolution. No merge logic.
 Pure functions: dict in, model out.
 """
 from __future__ import annotations
- 
-from pericat.core.models import (
-    Agent,
-    AgentIdentity,
-    AgentOrchestration,
-    AgentPolicy,
-    AgentServerRef,
-    FileAccess,
-    InlinePolicyRule,
-    MCPServer,
-    PolicyEngine,
-    Tool,
-    ToolPermission,
-)
+
+
+from pericat.core.models.agent_models import Agent, AgentIdentity, AgentOrchestration, AgentServerRef
+from pericat.core.models.policy_engine import AgentPolicy, InlinePolicyRule, PolicyEngine
+from pericat.core.models.file_access import FileAccess
+from pericat.core.models.mcp_server import MCPServer
+from pericat.core.models.tool_permissions import Tool, ToolPermission
 
  
 def parse_tool_permission(raw: dict) -> ToolPermission:

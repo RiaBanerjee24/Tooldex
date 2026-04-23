@@ -55,7 +55,7 @@ from pericat.core.discovery.results import (
     DiscoverySource,
     SourceStatus,
 )
-from pericat.core.models import MCPServer
+from pericat.core.models.mcp_server import MCPServer
 
 logger = logging.getLogger("pericat.discovery.config")
 

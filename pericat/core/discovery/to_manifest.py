@@ -21,12 +21,9 @@ from pericat.core.discovery.results import (
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from pericat.core.models import (
-    MCPServer,
-    PericatManifest,
-    PericatMetadata,
-    _DiscoveredToolLite,
-)
+from pericat.core.models.mcp_server import MCPServer, _DiscoveredToolLite
+from pericat.core.models.root_manifest import PericatManifest
+from pericat.core.models.metadata import PericatMetadata
 
 
 def build_manifest(
