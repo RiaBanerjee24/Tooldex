@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react"
 import { api } from "../api.js"
 import { useFetch } from "../hooks/useFetch.js"
-import { Tag, RiskBadge, AccessBadge, Card, CardHead, Empty, Spinner, Err, SidebarBtn } from "../components/ui.jsx"
+import {
+    Tag, RiskBadge, AccessBadge, Card, CardHead, Empty, Spinner, Err, SidebarBtn,
+    ProvenanceTag, ProvenanceDot, ProvenanceIcon,
+} from "../components/ui.jsx"
 
 export function Servers() {
     const { data: list, loading, error } = useFetch(api.servers)
@@ -23,7 +26,10 @@ export function Servers() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     {list.servers?.map(s => (
                         <SidebarBtn key={s.id} active={sel === s.id} onClick={() => setSel(s.id)}>
-                            <div style={{ fontWeight: 500, fontSize: 13, color: sel === s.id ? "var(--cream)" : "var(--text2)" }}>{s.name}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                                <ProvenanceDot server={s} />
+                                <div style={{ fontWeight: 500, fontSize: 13, color: sel === s.id ? "var(--cream)" : "var(--text2)" }}>{s.name}</div>
+                            </div>
                             <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginTop: 2 }}>{s.agent_count}a · {s.transport}</div>
                         </SidebarBtn>
                     ))}
@@ -33,7 +39,13 @@ export function Servers() {
                     <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                         <Card highlight>
                             <div style={{ padding: "20px 22px" }}>
-                                <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", marginBottom: 6 }}>{detail.name}</h2>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
+                                    <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", margin: 0, display: "flex", alignItems: "center" }}>
+                                        {detail.name}
+                                        <ProvenanceIcon server={detail} />
+                                    </h2>
+                                    <ProvenanceTag server={detail} />
+                                </div>
                                 <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 16 }}>{detail.description}</p>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
                                     {[
