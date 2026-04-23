@@ -32,7 +32,7 @@ from pericat.core.discovery.results import (
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from pericat.core.models import MCPServer
+from pericat.core.models.mcp_server import MCPServer
 
 logger = logging.getLogger("pericat.discovery.mcp_client")
 
