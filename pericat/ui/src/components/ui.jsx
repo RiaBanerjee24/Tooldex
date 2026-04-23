@@ -1,5 +1,123 @@
 import { ACCESS, RISK } from "../constants.js"
 
+// ---------------------------------------------------------------------------
+// Server provenance — where did this server record come from, and is the
+// probe actually working?
+//
+// We derive one of three visual states from the backend's `source` and
+// `discovery_status` fields:
+//
+//   declared       lime green   — in YAML + seen by discovery (the good case)
+//   discovered     yellow       — found by discovery but not declared in YAML
+//   not-discovered red          — declared in YAML but absent from every
+//                                 MCP-client config we checked
+//
+// If the probe itself failed (timeout / protocol error), the tag color gets
+// DOWNGRADED to yellow regardless of what the source says, because "we
+// know about it but can't talk to it" is the yellow story — not green.
+// A separate ⚠ icon next to the card title carries the specific reason.
+//
+// If the probe succeeded but the server reports zero tools, the tag stays
+// green (valid state) and an ℹ icon appears instead. This isn't a warning,
+// it's a heads-up.
+// ---------------------------------------------------------------------------
+
+export function classifyServerProvenance(server) {
+    const source = server.source || "yaml"
+    const status = server.discovery_status || "not_attempted"
+
+    // Probe-level issues override tag color
+    const probeFailed = status === "failed"
+    const toolsEmpty =
+        status === "ok" &&
+        (server.discovered_tools?.length || 0) === 0
+
+    let state, color
+    if (source === "discovered") {
+        state = "discovered"
+        color = "yellow"
+    } else if (source === "both") {
+        state = "declared"
+        color = probeFailed ? "yellow" : "lime"
+    } else {
+        // source === "yaml" — declared but not in any client config
+        state = status === "not_found_in_clients" ? "not-discovered" : "declared"
+        color = status === "not_found_in_clients" ? "red"
+            : probeFailed ? "yellow"
+                : "lime"
+    }
+
+    // Icon + tooltip — only rendered when there's something to surface
+    let icon = null, iconMessage = null
+    if (probeFailed) {
+        icon = "warning"
+        iconMessage = server.discovery_error || "Probe failed"
+    } else if (toolsEmpty) {
+        icon = "info"
+        iconMessage = "Server reports no tools"
+    }
+
+    return { state, color, icon, iconMessage }
+}
+
+const PROVENANCE_COLOR_VARS = {
+    lime: { color: "var(--lime)", bg: "var(--lime-bg)", border: "var(--lime-border)" },
+    yellow: { color: "var(--yellow-muted)", bg: "var(--orange-bg)", border: "var(--orange-border)" },
+    red: { color: "var(--red)", bg: "var(--red-bg)", border: "var(--red-border)" },
+}
+
+export function ProvenanceTag({ server }) {
+    const { state, color } = classifyServerProvenance(server)
+    const c = PROVENANCE_COLOR_VARS[color]
+    return (
+        <span style={{
+            display: "inline-block", padding: "2px 9px", borderRadius: 3,
+            background: c.bg, border: `1px solid ${c.border}`, color: c.color,
+            fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
+            fontFamily: "Menlo, Consolas, monospace",
+        }}>
+            {state}
+        </span>
+    )
+}
+
+export function ProvenanceDot({ server }) {
+    const { color } = classifyServerProvenance(server)
+    const c = PROVENANCE_COLOR_VARS[color]
+    return (
+        <span style={{
+            display: "inline-block", width: 7, height: 7, borderRadius: "50%",
+            flexShrink: 0, background: c.color,
+        }} />
+    )
+}
+
+export function ProvenanceIcon({ server }) {
+    const { icon, iconMessage } = classifyServerProvenance(server)
+    if (!icon) return null
+    const symbol = icon === "warning" ? "⚠" : "ℹ"
+    const isWarning = icon === "warning"
+    const fg = isWarning ? "var(--yellow-muted)" : "var(--cream-dim)"
+    const bg = isWarning ? "var(--orange-bg)" : "var(--surface3)"
+    const border = isWarning ? "var(--orange-border)" : "var(--border2)"
+    return (
+        <span
+            title={iconMessage}
+            aria-label={iconMessage}
+            style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 22, height: 22, borderRadius: "50%",
+                fontSize: 13, fontWeight: 700,
+                color: fg, background: bg, border: `1px solid ${border}`,
+                cursor: "help", marginLeft: 10,
+                fontFamily: "Menlo, Consolas, monospace",
+                lineHeight: 1, flexShrink: 0,
+            }}
+        >{symbol}</span>
+    )
+}
+
+
 export function Tag({ children, color }) {
     return (
         <span style={{
