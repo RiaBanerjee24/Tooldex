@@ -3,7 +3,7 @@ import { api } from "../api.js"
 import { useFetch } from "../hooks/useFetch.js"
 import {
     Tag, RiskBadge, AccessBadge, Card, CardHead, Empty, Spinner, Err, SidebarBtn,
-    ProvenanceTag, ProvenanceDot, ProvenanceIcon,
+    ProvenanceTag, ProvenanceDot,
 } from "../components/ui.jsx"
 
 export function Servers() {
@@ -40,9 +40,8 @@ export function Servers() {
                         <Card highlight>
                             <div style={{ padding: "20px 22px" }}>
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
-                                    <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", margin: 0, display: "flex", alignItems: "center" }}>
+                                    <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", margin: 0 }}>
                                         {detail.name}
-                                        <ProvenanceIcon server={detail} />
                                     </h2>
                                     <ProvenanceTag server={detail} />
                                 </div>
