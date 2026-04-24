@@ -67,16 +67,29 @@ const PROVENANCE_COLOR_VARS = {
 }
 
 export function ProvenanceTag({ server }) {
-    const { state, color } = classifyServerProvenance(server)
+    const { state, color, icon, iconMessage } = classifyServerProvenance(server)
     const c = PROVENANCE_COLOR_VARS[color]
+    const symbol = icon === "warning" ? "⚠" : icon === "info" ? "ℹ" : null
     return (
-        <span style={{
-            display: "inline-block", padding: "2px 9px", borderRadius: 3,
-            background: c.bg, border: `1px solid ${c.border}`, color: c.color,
-            fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
-            fontFamily: "Menlo, Consolas, monospace",
-        }}>
-            {state}
+        <span
+            title={iconMessage || undefined}
+            aria-label={iconMessage || undefined}
+            style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "2px 9px", borderRadius: 3,
+                background: c.bg, border: `1px solid ${c.border}`, color: c.color,
+                fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
+                fontFamily: "Menlo, Consolas, monospace",
+                cursor: iconMessage ? "help" : "default",
+            }}
+        >
+            {symbol && (
+                <span style={{
+                    fontSize: 12, lineHeight: 1, fontWeight: 700,
+                    letterSpacing: "0",
+                }}>{symbol}</span>
+            )}
+            <span>{state}</span>
         </span>
     )
 }
