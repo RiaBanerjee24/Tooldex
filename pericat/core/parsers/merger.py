@@ -12,9 +12,9 @@ No file I/O. No orchestration logic. Pure merge + conflict detection.
 """
 from __future__ import annotations
 
-from pericat.core.models.agent_models import Agent
-from pericat.core.models.conflict_models import ConflictWarning, ConflictError
-from pericat.core.models.mcp_server import MCPServer
+from pericat.core.models.agent import Agent
+from pericat.core.models.conflict import ConflictError, ConflictWarning
+from pericat.core.models.server import MCPServer
 
 from pericat.core.parsers.loader import FileContents
 

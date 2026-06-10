@@ -16,6 +16,7 @@ from pericat.core.discovery import detect_all, list_tools_for_all
 from pericat.core.discovery.to_manifest import build_manifest
 from pericat.core.parsers.parser import init_parser, init_parser_from_manifest
 from pericat.api.app import create_app
+from pericat._cli_output import print_summary, result_as_json
 
 logging.basicConfig(
     level=logging.INFO,
@@ -218,12 +219,12 @@ def discover(
     # ── output ───────────────────────────────────────────────────────────────
     if as_json:
         typer.echo(_json.dumps(
-            _result_as_json(config_result, tool_results),
+            result_as_json(config_result, tool_results),
             indent=2, default=str,
         ))
         raise typer.Exit(0)
 
-    _print_summary(config_result, tool_results)
+    print_summary(config_result, tool_results)
 
     if no_serve:
         raise typer.Exit(0)
@@ -266,141 +267,6 @@ def discover(
         port=port,
         log_level="warning",
     )
-
-
-# ---------------------------------------------------------------------------
-# Output helpers
-# ---------------------------------------------------------------------------
-
-def _print_summary(config_result, tool_results):
-    """Pretty-print discovery to stdout. Separate from JSON output."""
-    typer.echo("")
-    typer.echo(typer.style("Config files", bold=True))
-    for src in config_result.sources:
-        symbol, color = _status_symbol(src.status.value)
-        client = src.client.ljust(22)
-        summary = _source_line_summary(src)
-        typer.echo(
-            f"  {typer.style(symbol, fg=color)}  {client} {summary}"
-        )
-        if src.error:
-            typer.echo(f"     └─ {typer.style(src.error, fg='red', dim=True)}")
-
-    if config_result.duplicates:
-        typer.echo("")
-        typer.echo(typer.style("Duplicates (first sighting wins)", bold=True))
-        for dup in config_result.duplicates:
-            typer.echo(f"  ⚠  {dup}")
-
-    typer.echo("")
-    typer.echo(typer.style("Servers & tools", bold=True))
-    if not config_result.servers:
-        typer.echo("  (none discovered)")
-    else:
-        tools_by_server = {r.server_id: r for r in tool_results}
-        for server_id, server in config_result.servers.items():
-            result = tools_by_server.get(server_id)
-            if result is None:
-                typer.echo(f"  •  {server_id}  (probe skipped)")
-                continue
-            symbol, color = _status_symbol(result.status.value)
-            if result.ok:
-                dur = f"{result.duration_ms}ms" if result.duration_ms else ""
-                typer.echo(
-                    f"  {typer.style(symbol, fg=color)}  "
-                    f"{server_id:<22} {len(result.tools)} tools "
-                    f"{typer.style(dur, dim=True)}"
-                )
-                for tool in result.tools:
-                    desc = (tool.description or "").split("\n")[0][:60]
-                    typer.echo(f"       · {tool.name}  "
-                               f"{typer.style(desc, dim=True)}")
-            else:
-                typer.echo(
-                    f"  {typer.style(symbol, fg=color)}  "
-                    f"{server_id:<22} {result.status.value}"
-                )
-                if result.error:
-                    typer.echo(f"     └─ {typer.style(result.error, fg='red', dim=True)}")
-
-    # bottom line
-    checked = config_result.checked
-    servers = len(config_result.servers)
-    found_tools = sum(
-        len(r.tools) for r in tool_results if r.ok
-    )
-    typer.echo("")
-    typer.echo(typer.style(
-        f"Checked {checked} config locations · "
-        f"{servers} servers · "
-        f"{found_tools} tools",
-        bold=True,
-    ))
-
-
-def _status_symbol(status: str) -> tuple[str, str]:
-    good = {"found": ("✓", "green"), "empty": ("·", "yellow")}
-    if status in good:
-        return good[status]
-    if status == "not_found":
-        return ("✗", "white")
-    return ("✗", "red")
-
-
-def _source_line_summary(src) -> str:
-    if src.status.value == "found":
-        return f"{len(src.servers)} servers  " + typer.style(
-            src.path, dim=True,
-        )
-    if src.status.value == "not_found":
-        return typer.style(f"{src.path}  (not found)", dim=True)
-    if src.status.value == "empty":
-        return typer.style(f"{src.path}  (no mcpServers)", dim=True)
-    return typer.style(f"{src.path}  ({src.status.value})", fg="red", dim=True)
-
-
-def _result_as_json(config_result, tool_results) -> dict:
-    """Machine-readable form for CI / scripts."""
-    return {
-        "sources": [
-            {
-                "client": s.client,
-                "path": s.path,
-                "status": s.status.value,
-                "error": s.error,
-                "server_ids": [srv.id for srv in s.servers],
-            }
-            for s in config_result.sources
-        ],
-        "servers": {
-            sid: {
-                "name": srv.name,
-                "transport": srv.transport,
-                "command": srv.command,
-                "args": srv.args,
-                "url": srv.url,
-            }
-            for sid, srv in config_result.servers.items()
-        },
-        "tool_results": [
-            {
-                "server_id": r.server_id,
-                "status": r.status.value,
-                "error": r.error,
-                "duration_ms": r.duration_ms,
-                "tools": [
-                    {
-                        "name": t.name,
-                        "description": t.description,
-                        "input_schema": t.input_schema,
-                    }
-                    for t in r.tools
-                ],
-            }
-            for r in tool_results
-        ],
-        "duplicates": config_result.duplicates,
-    }
 
 
 def main():

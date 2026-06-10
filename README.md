@@ -20,6 +20,7 @@ Pericat searches upward from your current directory for a `pericat.yml` or `peri
 ```bash
 pericat run --config ./path/to/pericat.yml
 pericat run --config ./path/to/pericat.yml --port 9000 --host 0.0.0.0
+pericat discover
 ```
 
 ---

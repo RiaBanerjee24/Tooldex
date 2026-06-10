@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from pericat.core.models.mcp_server import MCPServer
+from pericat.core.models.server import MCPServer
 
 
 # ---------------------------------------------------------------------------

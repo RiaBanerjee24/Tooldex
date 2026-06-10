@@ -21,9 +21,8 @@ from pericat.core.discovery.results import (
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from pericat.core.models.mcp_server import MCPServer, _DiscoveredToolLite
-from pericat.core.models.root_manifest import PericatManifest
-from pericat.core.models.metadata import PericatMetadata
+from pericat.core.models.server import DiscoveredToolLite, MCPServer
+from pericat.core.models.manifest import PericatManifest, PericatMetadata
 
 
 def build_manifest(
@@ -55,7 +54,7 @@ def build_manifest(
     tool_results = tool_results or []
     tools_by_server = {r.server_id: r for r in tool_results}
 
-    # Attach discovered tools to each server (as pydantic _DiscoveredToolLite).
+    # Attach discovered tools to each server (as pydantic DiscoveredToolLite).
     servers: dict[str, MCPServer] = {}
     for server_id, server in config_result.servers.items():
         lite_tools = _lite_tools_for(server_id, tools_by_server.get(server_id))
@@ -80,9 +79,9 @@ def build_manifest(
 def _lite_tools_for(
     server_id: str,
     result: Optional[ToolDiscoveryResult],
-) -> list[_DiscoveredToolLite]:
+) -> list[DiscoveredToolLite]:
     """
-    Convert a ToolDiscoveryResult → list of _DiscoveredToolLite.
+    Convert a ToolDiscoveryResult → list of DiscoveredToolLite.
 
     Returns an empty list for missing, failed, or empty discoveries — the
     caller can look at the raw ToolDiscoveryResult separately if it needs
@@ -91,7 +90,7 @@ def _lite_tools_for(
     if result is None or result.status != ToolDiscoveryStatus.FOUND:
         return []
     return [
-        _DiscoveredToolLite(
+        DiscoveredToolLite(
             name=t.name,
             description=t.description,
             input_schema=t.input_schema,

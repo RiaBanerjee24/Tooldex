@@ -18,8 +18,8 @@ from typing import Optional
 
 import yaml
 
-from pericat.core.models.mcp_server import MCPServer
-from pericat.core.models.agent_models import Agent
+from pericat.core.models.server import MCPServer
+from pericat.core.models.agent import Agent
 from pericat.core.parsers.transformers import parse_agent, parse_server
 
 logger = logging.getLogger("pericat.loader")
