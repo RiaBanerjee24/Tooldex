@@ -1,289 +1,45 @@
 """
 pericat/core/discovery/config_detector.py
 
-Discovers MCP servers by reading known MCP-client config files.
+Public entry point for MCP config-file autodiscovery.
 
-Supported clients (Phase 1):
+Reads known MCP-client config files, parses each into MCPServer instances,
+and returns a deduplicated ConfigDetectionResult.
 
-    Claude Desktop      claude_desktop_config.json
-        macOS    ~/Library/Application Support/Claude/claude_desktop_config.json
-        Windows  %APPDATA%\\Claude\\claude_desktop_config.json
-        Linux    ~/.config/Claude/claude_desktop_config.json
-
-    Claude Code         .claude/settings.json  (walk up from cwd)
-                        ~/.claude/settings.json  (user-level)
-
-    Cursor              ~/.cursor/mcp.json  (user-level)
-                        <project>/.cursor/mcp.json  (walk up from cwd)
-
-    Windsurf            ~/.codeium/windsurf/mcp_config.json
-
-All readers share the same MCP server JSON shape popularised by Claude
-Desktop:
-
-    {
-      "mcpServers": {
-        "<server-id>": {
-          "command": "npx",           // stdio
-          "args": [...],
-          "env": {...}
-        },
-        "<server-id>": {
-          "url": "http://...",        // sse / streamable-http
-          ...
-        }
-      }
-    }
-
-Anything outside that shape is ignored. Env var references like ${VAR} or
-$VAR inside `env` and `args` values are resolved against the shell
-environment only — we never read .env files. Unresolved references pass
-through as-is so the developer can see them in the UI.
+Path resolution lives in _paths.py.
+Env resolution and shape parsing live in _parsers.py.
 """
 from __future__ import annotations
 
 import json
 import logging
-import os
-import re
-import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+from pericat.core.discovery._parsers import parse_claude_json, parse_mcp_servers
+from pericat.core.discovery._paths import (
+    CLIENT_PRIORITY,
+    build_plan,
+    claude_code_user_path,
+    codex_project_path,
+    codex_user_path,
+)
 from pericat.core.discovery.results import (
     ConfigDetectionResult,
     DiscoverySource,
     SourceStatus,
 )
-from pericat.core.models.mcp_server import MCPServer
 
 logger = logging.getLogger("pericat.discovery.config")
 
-# Priority order for dedup — first hit wins.
-# Rationale: Claude Desktop is the canonical MCP client, Claude Code inherits
-# from it, Cursor and Windsurf came later.
-_CLIENT_PRIORITY = (
-    "claude_desktop",
-    "claude_code_project",
-    "claude_code_user",
-    "cursor_project",
-    "cursor_user",
-    "windsurf",
-)
-
-# ${VAR} or $VAR — standard shell substitution
-_ENV_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
-
 
 # ---------------------------------------------------------------------------
-# Path resolvers (platform-aware)
-# ---------------------------------------------------------------------------
-
-def _claude_desktop_path() -> Path:
-    home = Path.home()
-    if sys.platform == "darwin":
-        return home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-    if sys.platform.startswith("win"):
-        appdata = os.environ.get("APPDATA")
-        base = Path(appdata) if appdata else home / "AppData" / "Roaming"
-        return base / "Claude" / "claude_desktop_config.json"
-    # linux / other
-    return home / ".config" / "Claude" / "claude_desktop_config.json"
-
-
-def _claude_code_user_path() -> Path:
-    return Path.home() / ".claude.json"
-
-
-def _claude_code_project_path(cwd: Path) -> Optional[Path]:
-    """Walk up from cwd looking for .claude.json."""
-    return _walk_up_for(cwd, (".claude.json"))
-
-
-def _cursor_user_path() -> Path:
-    return Path.home() / ".cursor" / "mcp.json"
-
-
-def _cursor_project_path(cwd: Path) -> Optional[Path]:
-    return _walk_up_for(cwd, (".cursor", "mcp.json"))
-
-
-def _windsurf_path() -> Path:
-    return Path.home() / ".codeium" / "windsurf" / "mcp_config.json"
-
-
-def _walk_up_for(start: Path, parts: tuple[str, ...]) -> Optional[Path]:
-    """
-    Walk up from `start` looking for start/<parts[0]>/.../<parts[-1]>.
-    Returns the first match, or None if we hit the filesystem root.
-    """
-    current = start.resolve()
-    while True:
-        candidate = current.joinpath(*parts)
-        if candidate.exists():
-            return candidate
-        parent = current.parent
-        if parent == current:
-            return None
-        current = parent
-
-
-# ---------------------------------------------------------------------------
-# Env var substitution
-# ---------------------------------------------------------------------------
-
-def _resolve_env_refs(value: str, env: dict[str, str]) -> str:
-    """Replace ${VAR} / $VAR with values from `env`. Unresolved → pass through."""
-    def repl(m: re.Match) -> str:
-        name = m.group(1) or m.group(2)
-        return env.get(name, m.group(0))
-    return _ENV_REF.sub(repl, value)
-
-
-def _resolve_dict(d: dict[str, str], env: dict[str, str]) -> dict[str, str]:
-    return {k: _resolve_env_refs(v, env) for k, v in d.items() if isinstance(v, str)}
-
-
-def _resolve_list(lst: list, env: dict[str, str]) -> list[str]:
-    out = []
-    for item in lst:
-        if isinstance(item, str):
-            out.append(_resolve_env_refs(item, env))
-        else:
-            # Non-string args are unusual but we pass them through as str so
-            # the model stays happy. MCP config spec expects strings.
-            out.append(str(item))
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Shape parsing — mcpServers → MCPServer
-# ---------------------------------------------------------------------------
-
-def _parse_claude_json(raw: dict, source_path: str, env=None) -> list[MCPServer]:
-    """
-    ~/.claude.json nests mcpServers under raw["projects"][<project-path>]["mcpServers"]
-    """
-    servers = []
-    projects = raw.get("projects")
-    if not isinstance(projects, dict):
-        return servers
-    for project_path, value in projects.items():
-        if not isinstance(value, dict):
-            continue
-        if "mcpServers" in value:
-            servers.extend(_parse_mcp_servers(value, source_path, env=env))
-    return servers
-
-def _read_claude_json(
-    env: Optional[dict[str, str]] = None,
-) -> Optional[DiscoverySource]:
-    path = _claude_code_user_path()
-    path_str = str(path)
-    client = "claude_code_user_path"
-
-    if not path.exists():
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.NOT_FOUND)
-
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
-
-    try:
-        raw = json.loads(text)
-    except json.JSONDecodeError as exc:
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-                               error=f"Invalid JSON at line {exc.lineno}: {exc.msg}")
-
-    if not isinstance(raw, dict):
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-                               error=f"Expected object, got {type(raw).__name__}")
-
-    servers = _parse_claude_json(raw, path_str, env=env)
-    status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
-    return DiscoverySource(client=client, path=path_str, status=status, servers=servers)
-
-def _parse_mcp_servers(
-    raw: dict,
-    source_path: str,
-    env: Optional[dict[str, str]] = None,
-) -> list[MCPServer]:
-    """
-    Extract `mcpServers` block into a list of MCPServer instances.
-
-    `raw` is the already-loaded JSON dict. Missing / malformed entries are
-    logged and skipped rather than raising — one bad server shouldn't take
-    the whole config down.
-    """
-    env = env if env is not None else dict(os.environ)
-    mcp_servers = raw.get("mcpServers")
-    if not isinstance(mcp_servers, dict):
-        return []
-
-    results: list[MCPServer] = []
-    for server_id, spec in mcp_servers.items():
-        if not isinstance(spec, dict):
-            logger.warning(
-                "Skipping server %r in %s: expected object, got %s",
-                server_id, source_path, type(spec).__name__,
-            )
-            continue
-
-        try:
-            server = _spec_to_server(server_id, spec, env)
-        except Exception as exc:
-            logger.warning(
-                "Skipping server %r in %s: %s", server_id, source_path, exc,
-            )
-            continue
-
-        results.append(server)
-
-    return results
-
-
-def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServer:
-    """Build one MCPServer from one mcpServers entry."""
-    command = spec.get("command")
-    url = spec.get("url")
-    args_raw = spec.get("args") or []
-    env_raw = spec.get("env") or {}
-    description = spec.get("description")  # non-standard but some configs carry it
-
-    # Transport inference
-    if command:
-        transport = "stdio"
-    elif url:
-        # Can't distinguish sse vs streamable-http from config alone —
-        # streamable-http is the newer default but sse is what most existing
-        # configs use. Default to sse; the MCP client (Phase 1 #3) will
-        # confirm by probing.
-        transport = spec.get("type") or spec.get("transport") or "sse"
-    else:
-        raise ValueError("server has neither `command` nor `url`")
-
-    if command:
-        command = _resolve_env_refs(command, env)
-    if url:
-        url = _resolve_env_refs(url, env)
-    args = _resolve_list(args_raw, env) if isinstance(args_raw, list) else []
-    resolved_env = _resolve_dict(env_raw, env) if isinstance(env_raw, dict) else {}
-
-    return MCPServer(
-        id=server_id,
-        name=server_id,                 # name defaults to id; UI can override later
-        transport=transport,
-        command=command,
-        args=args,
-        env=resolved_env,
-        url=url,
-        description=description,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Per-client readers
+# Per-client file readers
 # ---------------------------------------------------------------------------
 
 def _read_one(
@@ -292,11 +48,11 @@ def _read_one(
     env: Optional[dict[str, str]] = None,
 ) -> Optional[DiscoverySource]:
     """
-    Read one config file and return a DiscoverySource.
+    Read one JSON config file and return a DiscoverySource.
 
-    Returns None when `path` is None (i.e. path resolution itself came up
-    empty — e.g. no .claude/settings.json anywhere up the tree). That lets
-    the caller skip recording sources that were never applicable.
+    Returns None when `path` is None (path resolution came up empty —
+    e.g. no .cursor/mcp.json anywhere up the tree). That lets the caller
+    skip recording sources that were never applicable.
     """
     if path is None:
         return None
@@ -309,10 +65,7 @@ def _read_one(
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        return DiscoverySource(
-            client=client, path=path_str, status=SourceStatus.READ_ERROR,
-            error=str(exc),
-        )
+        return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
 
     try:
         raw = json.loads(text)
@@ -328,32 +81,85 @@ def _read_one(
             error=f"Top-level JSON must be an object, got {type(raw).__name__}",
         )
 
-    servers = _parse_mcp_servers(raw, path_str, env=env)
-    if not servers:
+    servers = parse_mcp_servers(raw, path_str, env=env)
+    status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
+    return DiscoverySource(client=client, path=path_str, status=status, servers=servers)
+
+
+def _read_claude_json(
+    cwd: Path,
+    env: Optional[dict[str, str]] = None,
+) -> Optional[DiscoverySource]:
+    """Read ~/.claude.json and extract both user-level and project-level mcpServers."""
+    path = claude_code_user_path()
+    path_str = str(path)
+    client = "claude_code_user"
+
+    if not path.exists():
+        return DiscoverySource(client=client, path=path_str, status=SourceStatus.NOT_FOUND)
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
+
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
         return DiscoverySource(
-            client=client, path=path_str, status=SourceStatus.EMPTY,
+            client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
+            error=f"Invalid JSON at line {exc.lineno}: {exc.msg}",
         )
 
-    return DiscoverySource(
-        client=client, path=path_str, status=SourceStatus.FOUND, servers=servers,
-    )
+    if not isinstance(raw, dict):
+        return DiscoverySource(
+            client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
+            error=f"Expected object, got {type(raw).__name__}",
+        )
+
+    servers = parse_claude_json(raw, path_str, cwd, env=env)
+    status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
+    return DiscoverySource(client=client, path=path_str, status=status, servers=servers)
+
+
+def _read_codex_toml(
+    path: Path,
+    client: str,
+    env: Optional[dict[str, str]] = None,
+) -> DiscoverySource:
+    """Read a Codex TOML config and extract `[mcp_servers.<id>]` tables."""
+    path_str = str(path)
+
+    if not path.exists():
+        return DiscoverySource(client=client, path=path_str, status=SourceStatus.NOT_FOUND)
+
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
+
+    try:
+        raw = tomllib.loads(data.decode("utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        return DiscoverySource(
+            client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
+            error=f"Invalid TOML: {exc}",
+        )
+
+    if not isinstance(raw, dict):
+        return DiscoverySource(
+            client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
+            error=f"Top-level TOML must be a table, got {type(raw).__name__}",
+        )
+
+    servers = parse_mcp_servers(raw, path_str, env=env, key="mcp_servers")
+    status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
+    return DiscoverySource(client=client, path=path_str, status=status, servers=servers)
 
 
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
-
-# Each entry: (client_id, path_resolver). Resolvers that need cwd close over it.
-def _build_plan(cwd: Path) -> list[tuple[str, Callable[[], Optional[Path]]]]:
-    return [
-        ("claude_desktop",       _claude_desktop_path),
-        ("claude_code_project",  lambda: _claude_code_project_path(cwd)),
-        # ("claude_code_user",     _claude_code_user_path),
-        ("cursor_project",       lambda: _cursor_project_path(cwd)),
-        ("cursor_user",          _cursor_user_path),
-        ("windsurf",             _windsurf_path),
-    ]
-
 
 def detect_all(
     cwd: Optional[Path] = None,
@@ -367,97 +173,93 @@ def detect_all(
     Parameters
     ----------
     cwd : Path, optional
-        Directory from which to search for project-local configs
-        (.cursor/mcp.json, .claude/settings.json). Defaults to Path.cwd().
-        Has no effect when `auto_detect=False`.
+        Directory from which to search for project-local configs. Defaults
+        to Path.cwd(). Has no effect when `auto_detect=False`.
     env : dict, optional
-        Environment to use when resolving ${VAR} references. Defaults to
-        os.environ.
+        Environment for resolving ${VAR} references. Defaults to os.environ.
     custom_paths : list[Path], optional
-        Explicit paths to MCP config files. Each is read with the same
-        parser as the built-in locations and appears in `result.sources`
-        with `client="custom"`. Processed BEFORE built-in locations so
-        user-specified configs win on duplicate server IDs.
-
-        A custom path that doesn't exist or can't be parsed does NOT
-        crash — it's recorded as a failed DiscoverySource so the caller
-        (e.g. CLI) can surface the problem without aborting the rest.
+        Explicit paths to MCP config files. Processed BEFORE built-in
+        locations so user-specified configs win on duplicate server IDs.
+        A path that does not exist or can't be parsed is recorded as a
+        failed DiscoverySource rather than aborting the rest.
     auto_detect : bool
-        When False, the 6 built-in client locations are skipped entirely
-        and only `custom_paths` are read. Useful for hermetic tests and
-        CI runs that should only consider an explicit manifest.
-
-    Returns
-    -------
-    ConfigDetectionResult
-        Holds one DiscoverySource per location checked, plus the
-        deduplicated union of MCPServer instances. First sighting wins
-        on conflicts; custom configs always come first when both flags
-        are used together.
+        When False, skip all built-in client locations and only read
+        `custom_paths`. Useful for hermetic tests and CI runs.
     """
     cwd = cwd or Path.cwd()
     result = ConfigDetectionResult()
 
-    # ── 1. Custom paths — always processed first if provided ─────────────────
-    if custom_paths:
-        for raw_path in custom_paths:
-            path = Path(raw_path).expanduser().resolve()
-            source = _read_one("custom", path, env=env)
-            # _read_one only returns None when path is None (which can't
-            # happen here), so source is always a DiscoverySource.
-            assert source is not None
-            result.sources.append(source)
-            _merge_servers(result, source, client="custom")
+    # ── 1. Custom paths — processed first so they win on duplicate IDs ────────
+    for raw_path in (custom_paths or []):
+        path = Path(raw_path).expanduser().resolve()
+        source = _read_one("custom", path, env=env)
+        assert source is not None
+        result.sources.append(source)
+        _merge_servers(result, source, client="custom")
 
-    # ── 2. Built-in locations ────────────────────────────────────────────────
-    if auto_detect:
+    if not auto_detect:
+        return result
 
-        source = _read_claude_json(env=env)
-        if source is not None:
-            result.sources.append(source)
-            _merge_servers(result, source, client="claude_code_user")
-        plan = _build_plan(cwd)
-        priority_index = {c: i for i, c in enumerate(_CLIENT_PRIORITY)}
-        plan.sort(key=lambda item: priority_index.get(item[0], 999))
+    # ── 2. Claude Code user-level (~/.claude.json) ────────────────────────────
+    source = _read_claude_json(cwd, env=env)
+    if source is not None:
+        result.sources.append(source)
+        _merge_servers(result, source, client="claude_code_user")
 
-        for client, resolver in plan:
-            try:
-                path = resolver()
-            except Exception as exc:
-                logger.warning("Path resolution failed for %s: %s", client, exc)
-                continue
+    # ── 3. Codex project-level (<project>/.codex/config) ─────────────────────
+    project_codex = codex_project_path(cwd)
+    if project_codex is not None:
+        source = _read_codex_toml(project_codex, client="codex_project", env=env)
+        result.sources.append(source)
+        _merge_servers(result, source, client="codex_project")
 
-            source = _read_one(client, path, env=env)
-            if source is None:
-                continue
+    # ── 4. Codex user-level (~/.codex/config.toml) ───────────────────────────
+    source = _read_codex_toml(codex_user_path(), client="codex", env=env)
+    result.sources.append(source)
+    _merge_servers(result, source, client="codex")
 
-            result.sources.append(source)
-            _merge_servers(result, source, client=client)
+    # ── 5. JSON-based clients (Claude Desktop, Cursor, Windsurf) ─────────────
+    priority_index = {c: i for i, c in enumerate(CLIENT_PRIORITY)}
+    plan = sorted(build_plan(cwd), key=lambda item: priority_index.get(item[0], 999))
+
+    for client, resolver in plan:
+        try:
+            path = resolver()
+        except Exception as exc:
+            logger.warning("Path resolution failed for %s: %s", client, exc)
+            continue
+
+        source = _read_one(client, path, env=env)
+        if source is None:
+            continue
+
+        result.sources.append(source)
+        _merge_servers(result, source, client=client)
 
     return result
 
+
+# ---------------------------------------------------------------------------
+# Merge helpers
+# ---------------------------------------------------------------------------
 
 def _merge_servers(
     result: ConfigDetectionResult,
     source: DiscoverySource,
     client: str,
 ) -> None:
-    """
-    Merge a source's servers into `result.servers`, recording duplicates.
-    First-sighting-wins rule — the caller controls ordering.
-    """
+    """Merge a source's servers into result. First-sighting-wins on conflicts."""
     for server in source.servers:
         if server.id in result.servers:
-            prior_client = _owner_of(result, server.id)
+            prior = _owner_of(result, server.id)
             result.duplicates.append(
-                f"{client}:{server.id} already defined by {prior_client}"
+                f"{client}:{server.id} already defined by {prior}"
             )
             continue
         result.servers[server.id] = server
 
 
 def _owner_of(result: ConfigDetectionResult, server_id: str) -> str:
-    """Which client contributed this server? Used only for duplicate notes."""
     for src in result.sources:
         if any(s.id == server_id for s in src.servers):
             return src.client

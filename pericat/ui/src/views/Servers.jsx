@@ -62,6 +62,29 @@ export function Servers() {
                         </Card>
 
                         <Card>
+                            <CardHead right={<Tag>{detail.discovered_tools?.length || 0}</Tag>}>Tools</CardHead>
+                            {!detail.discovered_tools?.length
+                                ? <Empty msg="no tools discovered" />
+                                : (
+                                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                        <tbody>
+                                            {detail.discovered_tools.map((tool, ti) => (
+                                                <tr key={ti} style={{ borderBottom: ti < detail.discovered_tools.length - 1 ? "1px solid var(--border)" : "none" }}>
+                                                    <td style={{ padding: "10px 18px", width: 220, verticalAlign: "top" }}>
+                                                        <span style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 12, color: "var(--cream)", fontWeight: 500 }}>{tool.name}</span>
+                                                    </td>
+                                                    <td style={{ padding: "10px 18px", verticalAlign: "top" }}>
+                                                        <span style={{ fontSize: 12, color: "var(--text2)" }}>{tool.description || "—"}</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )
+                            }
+                        </Card>
+
+                        <Card>
                             <CardHead>Connected Agents</CardHead>
                             {!detail.agents_connected?.length
                                 ? <Empty msg="no agents connected" />

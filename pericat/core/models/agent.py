@@ -1,9 +1,15 @@
 from __future__ import annotations
 from typing import Literal, Optional
 from pydantic import BaseModel
-from pericat.core.models.tool_permissions import Tool
-from pericat.core.models.file_access import FileAccess
-from pericat.core.models.policy_engine import AgentPolicy
+from pericat.core.models.tool import Tool
+from pericat.core.models.policy import AgentPolicy
+
+
+class FileAccess(BaseModel):
+    path: str
+    permission: str
+    note: Optional[str] = None
+
 
 class AgentServerRef(BaseModel):
     ref: str                    # must match a server id
@@ -17,28 +23,19 @@ class AgentIdentity(BaseModel):
     scopes: list[str] = []
     notes: Optional[str] = None
 
-# ---------------------------------------------------------------------------
-# Orchestration  (A2A delegation)
-# ---------------------------------------------------------------------------
 
 class AgentOrchestration(BaseModel):
     """
     can_delegate_to:  this agent may hand off tasks TO these agent ids
-    receives_from:    explicitly marks that this agent accepts tasks FROM
-                      these agent ids — signals intentional bidirectionality
+    receives_from:    explicitly marks that this agent accepts tasks FROM these
+                      agent ids — signals intentional bidirectionality
     """
     can_delegate_to: list[str] = []
     receives_from: list[str] = []
 
 
-# ---------------------------------------------------------------------------
-# Agent
-# ---------------------------------------------------------------------------
-
 class Agent(BaseModel):
-    """
-    id is the dict key, populated by parser.
-    """
+    """id is the dict key, populated by the parser."""
     id: str = ""
     name: str
     description: Optional[str] = None

@@ -13,8 +13,8 @@ Input: dict of agents. Output: list of OrchestrationIssue.
 """
 from __future__ import annotations
 
-from pericat.core.models.agent_models import Agent
-from pericat.core.models.conflict_models import OrchestrationIssue
+from pericat.core.models.agent import Agent
+from pericat.core.models.conflict import OrchestrationIssue
 
 
 def _build_graph(

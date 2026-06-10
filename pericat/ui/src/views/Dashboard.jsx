@@ -4,7 +4,12 @@ export function Dashboard({ health, agentsData, serversData }) {
     if (!health || !agentsData || !serversData) return <Spinner />
     const agents = agentsData.agents || []
     const servers = serversData.servers || []
-    const totalTools = agents.reduce((n, a) => n + (a.total_tools || 0), 0)
+    // Agent-declared tool access (pericat.yml) when agents exist; otherwise
+    // fall back to tools found via live MCP discovery (`pericat discover`),
+    // which has no agents yet (Phase 1 AST scan pending).
+    const agentTools = agents.reduce((n, a) => n + (a.total_tools || 0), 0)
+    const discoveredTools = servers.reduce((n, s) => n + (s.discovered_tool_count || 0), 0)
+    const totalTools = agentTools || discoveredTools
 
     return (
         <div className="fade" style={{ padding: "32px 0" }}>

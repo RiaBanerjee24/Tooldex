@@ -21,12 +21,9 @@ from pathlib import Path
 from typing import Callable, Optional
 
 
-from pericat.core.models.mcp_server import MCPServer
-from pericat.core.models.observatory import Observatory
-from pericat.core.models.root_manifest import PericatManifest
-from pericat.core.models.metadata import PericatMetadata
-from pericat.core.models.policy_engine import PolicyEngine
-from pericat.core.models.tool_permissions import Tool
+from pericat.core.models.manifest import Observatory, PericatManifest, PericatMetadata
+from pericat.core.models.policy import PolicyEngine
+from pericat.core.models.tool import Tool
 
 from pericat.core.parsers.loader import load_all_included_files, read_yaml
 from pericat.core.parsers.merger import merge

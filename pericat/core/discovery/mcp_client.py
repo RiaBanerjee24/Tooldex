@@ -32,7 +32,7 @@ from pericat.core.discovery.results import (
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from pericat.core.models.mcp_server import MCPServer
+from pericat.core.models.server import MCPServer
 
 logger = logging.getLogger("pericat.discovery.mcp_client")
 
@@ -116,12 +116,32 @@ async def probe_server(
         )
     except Exception as exc:  # noqa: BLE001 — discovery must not propagate
         logger.debug("probe_server error for %s", server.id, exc_info=True)
+        cause = _root_cause(exc)
         return ToolDiscoveryResult(
             server_id=server.id,
             status=ToolDiscoveryStatus.PROTOCOL_ERROR,
-            error=f"{type(exc).__name__}: {exc}",
+            error=f"{type(cause).__name__}: {cause}",
             duration_ms=int((time.monotonic() - start) * 1000),
         )
+
+
+def _root_cause(exc: BaseException) -> BaseException:
+    """
+    Unwrap nested (Base)ExceptionGroups down to the innermost exception.
+
+    anyio task groups (stdio_client, ClientSession) wrap failures in
+    ExceptionGroups, often nested several levels deep. The outer message
+    — "unhandled errors in a TaskGroup (1 sub-exception)" — carries no
+    information about what actually failed (e.g. EADDRINUSE from an
+    `mcp-remote` OAuth callback port collision, or "Connection closed").
+    Duck-typing on `.exceptions` avoids depending on the `ExceptionGroup`
+    builtin, which only exists on Python 3.11+.
+    """
+    while True:
+        sub = getattr(exc, "exceptions", None)
+        if not sub:
+            return exc
+        exc = sub[0]
 
 
 async def _run_probe(

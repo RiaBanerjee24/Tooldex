@@ -8,11 +8,10 @@ Pure functions: dict in, model out.
 from __future__ import annotations
 
 
-from pericat.core.models.agent_models import Agent, AgentIdentity, AgentOrchestration, AgentServerRef
-from pericat.core.models.policy_engine import AgentPolicy, InlinePolicyRule, PolicyEngine
-from pericat.core.models.file_access import FileAccess
-from pericat.core.models.mcp_server import MCPServer
-from pericat.core.models.tool_permissions import Tool, ToolPermission
+from pericat.core.models.agent import Agent, AgentIdentity, AgentOrchestration, AgentServerRef, FileAccess
+from pericat.core.models.policy import AgentPolicy, InlinePolicyRule, PolicyEngine
+from pericat.core.models.server import MCPServer
+from pericat.core.models.tool import Tool, ToolPermission
 
  
 def parse_tool_permission(raw: dict) -> ToolPermission:
