@@ -1,9 +1,9 @@
-# Pericat — Configuration & Setup Guide
+# Toolpool — Configuration & Setup Guide
 
 ## Installation
 
 ```bash
-pip install pericat
+pip install toolpool
 ```
 
 ---
@@ -12,40 +12,40 @@ pip install pericat
 
 ```bash
 cd your-project
-pericat run
+toolpool run
 ```
 
-Pericat searches upward from your current directory for a `pericat.yml` or `pericat.yaml` file. If you want to point at a specific file:
+Toolpool searches upward from your current directory for a `toolpool.yml` or `toolpool.yaml` file. If you want to point at a specific file:
 
 ```bash
-pericat run --config ./path/to/pericat.yml
-pericat run --config ./path/to/pericat.yml --port 9000 --host 0.0.0.0
-pericat discover
+toolpool run --config ./path/to/toolpool.yml
+toolpool run --config ./path/to/toolpool.yml --port 9000 --host 0.0.0.0
+toolpool discover
 ```
 
 ---
 
 ## Project structure
 
-Pericat supports two layouts — single file for small projects, multi-file for larger ones. Both produce the same result.
+Toolpool supports two layouts — single file for small projects, multi-file for larger ones. Both produce the same result.
 
 ### Single file
 
-Everything in one `pericat.yml` at your project root:
+Everything in one `toolpool.yml` at your project root:
 
 ```
 your-project/
-  pericat.yml
+  toolpool.yml
   policy.rego
 ```
 
 ### Multi-file
 
-Split agents and servers across multiple files. Folder names are yours — Pericat follows whatever you declare in `include:`:
+Split agents and servers across multiple files. Folder names are yours — Toolpool follows whatever you declare in `include:`:
 
 ```
 your-project/
-  pericat.yml           ← root manifest
+  toolpool.yml           ← root manifest
   agents/
     read-agent.yml
     write-agent.yml
@@ -57,12 +57,12 @@ your-project/
 
 ---
 
-## The root manifest (`pericat.yml`)
+## The root manifest (`toolpool.yml`)
 
 The root manifest is the only required file. It defines global config and optionally declares which other files to include.
 
 ```yaml
-pericat: "0.1.0"
+toolpool: "0.1.0"
 
 metadata:
   name: "My Agent Fleet"
@@ -82,7 +82,7 @@ include:                            # optional — omit for single-file mode
   - ./agents/*.yml                  # glob patterns
   - ./servers/*.yml
   - ./teams/**/*.yml                # recursive glob
-  - ./services/billing/pericat.yml  # explicit path for cross-service refs
+  - ./services/billing/toolpool.yml  # explicit path for cross-service refs
 
 # inline agents (optional — can also live in included files)
 agents:
@@ -105,7 +105,7 @@ observatory:
 
 - Glob patterns are resolved relative to the root manifest's directory
 - Included files can only contain `agents:` and `servers:` — not `policy_engines:`, `metadata:`, or `include:` (no nested includes)
-- Folder names are entirely up to you — `agents/`, `my-bots/`, `services/` — Pericat doesn't care
+- Folder names are entirely up to you — `agents/`, `my-bots/`, `services/` — Toolpool doesn't care
 
 ---
 
@@ -131,7 +131,7 @@ policy_engines:
 | `description` | no | Human-readable description |
 | `policy_path` | no | OPA rule path, default: `agent.authz.allow` |
 
-Pericat reads and displays policy files — it does not execute them.
+Toolpool reads and displays policy files — it does not execute them.
 
 ---
 
@@ -279,7 +279,7 @@ orchestration:
     - router-agent    # signals: "I know router sends tasks to me"
 ```
 
-Pericat analyses the full delegation graph and flags:
+Toolpool analyses the full delegation graph and flags:
 
 | Pattern | Label | Meaning |
 |---|---|---|
@@ -340,13 +340,13 @@ agents:
 | Agent id in root + included file | Root wins. UI shows ⚠ warning label on the agent |
 | Agent id in two included files | Neither wins. UI shows ❌ conflict — no data rendered until resolved |
 | Server id conflicts | Same rules as agents |
-| Policy engine id collision | Invalid YAML — caught before Pericat loads |
+| Policy engine id collision | Invalid YAML — caught before Toolpool loads |
 
 ---
 
 ## API endpoints
 
-Once running, Pericat exposes:
+Once running, Toolpool exposes:
 
 | Endpoint | Description |
 |---|---|
@@ -366,34 +366,34 @@ Once running, Pericat exposes:
 ## CLI reference
 
 ```bash
-# auto-discover pericat.yml from current directory upward
-pericat run
+# auto-discover toolpool.yml from current directory upward
+toolpool run
 
 # explicit config path
-pericat run --config ./pericat.yml
+toolpool run --config ./toolpool.yml
 
 # custom host and port
-pericat run --port 9000 --host 0.0.0.0
+toolpool run --port 9000 --host 0.0.0.0
 
 # all options
-pericat run --config <path> --port <port> --host <host>
+toolpool run --config <path> --port <port> --host <host>
 ```
 
 ---
 
 ## Hot reload
 
-Pericat watches all loaded files — the root manifest and every included file — for changes. When any file is saved, the manifest is reloaded automatically and the UI reflects the new state within seconds. No restart needed.
+Toolpool watches all loaded files — the root manifest and every included file — for changes. When any file is saved, the manifest is reloaded automatically and the UI reflects the new state within seconds. No restart needed.
 
 ---
 
 ## Validations run at startup
 
-Pericat checks the following and prints warnings before starting:
+Toolpool checks the following and prints warnings before starting:
 
 - Agent references an unknown server id
 - Agent references an unknown policy engine id
 - Agent `can_delegate_to` references an unknown agent id
 - Agent `receives_from` references an unknown agent id
 
-These are warnings, not errors — Pericat starts regardless. Conflicts (duplicate ids) are surfaced in the UI at runtime.
+These are warnings, not errors — Toolpool starts regardless. Conflicts (duplicate ids) are surfaced in the UI at runtime.

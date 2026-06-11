@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pericat"
+name = "toolpool"
 version = "0.1.0"
 description = "AI Agent Permission Observatory"
 readme = "README.md"
@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pericat = "pericat.cli:main"
+toolpool = "toolpool.cli:main"
 
 [tool.hatch.build.targets.wheel]
-include = ["pericat/**"]
+include = ["toolpool/**"]
