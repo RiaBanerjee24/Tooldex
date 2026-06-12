@@ -4,10 +4,59 @@ Toolpool CLI — `run` reads toolpool.yml, `discover` autodiscovers everything.
 """
 import json as _json
 import logging
+import socket
 import uvicorn
 import typer
 from typing import Optional
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Port resolution
+# ---------------------------------------------------------------------------
+
+_PORT_DEFAULT = 8282
+_PORT_HARD_LIMIT = 49150
+
+# Ports to always skip: IANA well-known (0-1023) plus common dev/service ports
+_SKIP_PORTS: frozenset[int] = frozenset({
+    *range(0, 1024),
+    3000, 3001,   # React / Node
+    3306,         # MySQL
+    4200,         # Angular
+    5000, 5001,   # Flask / various
+    5173,         # Vite dev
+    5432,         # PostgreSQL
+    6379,         # Redis
+    8000, 8001,   # Django / common HTTP alt
+    8080, 8081,   # Common HTTP alt
+    8443,         # HTTPS alt
+    8888,         # Jupyter Notebook
+    9000,         # SonarQube / PHP-FPM
+    9090,         # Prometheus
+    9092,         # Kafka
+    9200,         # Elasticsearch
+    27017,        # MongoDB
+})
+
+
+def _find_free_port(start: int, host: str) -> int:
+    """Return the first non-skipped, non-occupied port >= start."""
+    port = start
+    while port <= _PORT_HARD_LIMIT:
+        if port not in _SKIP_PORTS:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    s.bind((host, port))
+                    return port
+                except OSError:
+                    pass
+        port += 1
+    typer.echo(
+        f"\n  Error: No free port found between {start} and {_PORT_HARD_LIMIT}.\n",
+        err=True,
+    )
+    raise typer.Exit(1)
 
 # Hoisted so tests can patch these as attributes of this module.
 # Cost is ~negligible import time since the discovery package doesn't
@@ -61,8 +110,8 @@ def run(
         )
     ),
     port: int = typer.Option(
-        8282, "--port", "-p",
-        help="Port to run on"
+        _PORT_DEFAULT, "--port", "-p",
+        help="Starting port. Increments automatically if occupied (hard limit 49150)."
     ),
     host: str = typer.Option(
         "127.0.0.1", "--host",
@@ -70,6 +119,11 @@ def run(
     ),
 ):
     """Start the Toolpool Observatory server."""
+    # ── resolve port ──────────────────────────────────────────────────────────
+    actual_port = _find_free_port(port, host)
+    if actual_port != port:
+        typer.echo(f"\n  Port {port} in use — using {actual_port} instead.")
+
     # ── resolve config path ───────────────────────────────────────────────────
     if config:
         config_path = Path(config)
@@ -120,14 +174,14 @@ def run(
   ║  Agents   {len(manifest.agents):<39}║
   ║  Servers  {len(manifest.servers):<39}║
   ╠══════════════════════════════════════════════════╣
-  ║  →  http://{host}:{port}                         ║
+  ║  →  http://{host}:{actual_port}                  ║
   ╚══════════════════════════════════════════════════╝
 """)
- 
+
     uvicorn.run(
         create_app(),
         host=host,
-        port=port,
+        port=actual_port,
         log_level="warning",
     )
 
@@ -138,7 +192,10 @@ def run(
 
 @cli.command()
 def discover(
-    port: int = typer.Option(8282, "--port", "-p", help="Port to run on"),
+    port: int = typer.Option(
+        _PORT_DEFAULT, "--port", "-p",
+        help="Starting port. Increments automatically if occupied (hard limit 49150)."
+    ),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
     no_serve: bool = typer.Option(
         False, "--no-serve",
@@ -237,6 +294,11 @@ def discover(
         )
         raise typer.Exit(0)
 
+    # ── resolve port ──────────────────────────────────────────────────────────
+    actual_port = _find_free_port(port, host)
+    if actual_port != port:
+        typer.echo(f"\n  Port {port} in use — using {actual_port} instead.")
+
     # ── install manifest into the parser singleton and start server ──────────
     manifest = build_manifest(config_result, tool_results)
     init_parser_from_manifest(manifest)
@@ -250,7 +312,7 @@ def discover(
             text = text[: width - 1] + "…"
         return f"║{text.ljust(width)}║"
 
-    url = f"http://{host}:{port}"
+    url = f"http://{host}:{actual_port}"
     typer.echo("\n  " + "╔" + "═" * 50 + "╗")
     typer.echo("  " + _row("       toolpool DISCOVER  v0.1.0"))
     typer.echo("  " + "╠" + "═" * 50 + "╣")
@@ -264,7 +326,7 @@ def discover(
     uvicorn.run(
         create_app(),
         host=host,
-        port=port,
+        port=actual_port,
         log_level="warning",
     )
 

@@ -54,13 +54,17 @@ function groupServers(servers) {
 // View
 // ---------------------------------------------------------------------------
 
-export function Servers() {
+export function Servers({ initialSel }) {
     const { data: list, loading, error } = useFetch(api.servers)
     const [sel, setSel] = useState(null)
     const { data: detail, loading: dLoading } = useFetch(
         () => sel ? api.server(sel) : Promise.resolve(null), [sel]
     )
-    useEffect(() => { if (list?.servers?.length && !sel) setSel(list.servers[0].id) }, [list])
+    useEffect(() => {
+        if (!list?.servers?.length) return
+        if (initialSel) setSel(initialSel)
+        else if (!sel) setSel(list.servers[0].id)
+    }, [list, initialSel])
 
     if (loading) return <Spinner />
     if (error) return <Err msg={error} />

@@ -254,11 +254,13 @@ export function SidebarBtn({ active, onClick, children }) {
     )
 }
 
-export function StatCard({ label, value, sub }) {
+export function StatCard({ label, value, sub, onClick }) {
     return (
-        <div style={{
+        <div onClick={onClick} style={{
             background: "var(--surface)", border: "1px solid var(--border)",
             borderRadius: "var(--radius-lg)", padding: "22px 24px", boxShadow: "var(--shadow)",
+            cursor: onClick ? "pointer" : "default",
+            transition: "border-color 0.12s",
         }}>
             <div style={{
                 fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase",

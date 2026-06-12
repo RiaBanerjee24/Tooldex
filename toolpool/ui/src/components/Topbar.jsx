@@ -1,7 +1,7 @@
 import { Dot, Wrap } from "./ui.jsx"
 
 export function Topbar({ tab, setTab, health }) {
-    const tabs = ["Dashboard", "Agents", "Servers", "Permissions"]
+    const tabs = ["Dashboard", "Servers"]
     return (
         <div style={{
             background: "var(--surface)", borderBottom: "1px solid var(--border)",

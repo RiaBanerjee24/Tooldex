@@ -1,15 +1,9 @@
-import { Card, CardHead, Dot, Tag, Spinner, StatCard } from "../components/ui.jsx"
+import { Card, CardHead, Spinner, StatCard } from "../components/ui.jsx"
 
-export function Dashboard({ health, agentsData, serversData }) {
-    if (!health || !agentsData || !serversData) return <Spinner />
-    const agents = agentsData.agents || []
+export function Dashboard({ health, serversData, onNavigateServers, onNavigateToServer }) {
+    if (!health || !serversData) return <Spinner />
     const servers = serversData.servers || []
-    // Agent-declared tool access (toolpool.yml) when agents exist; otherwise
-    // fall back to tools found via live MCP discovery (`toolpool discover`),
-    // which has no agents yet (Phase 1 AST scan pending).
-    const agentTools = agents.reduce((n, a) => n + (a.total_tools || 0), 0)
     const discoveredTools = servers.reduce((n, s) => n + (s.discovered_tool_count || 0), 0)
-    const totalTools = agentTools || discoveredTools
 
     return (
         <div className="fade" style={{ padding: "32px 0" }}>
@@ -22,11 +16,9 @@ export function Dashboard({ health, agentsData, serversData }) {
                 </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-                <StatCard label="Agents" value={agentsData.total} sub={`${agents.filter(a => a.status === "active").length} active`} />
-                <StatCard label="MCP Servers" value={serversData.total} sub="configured" />
-                <StatCard label="Tools Tracked" value={totalTools} sub="across all agents" />
-                <StatCard label="Policy Engines" value={health.config?.policy_engines} sub="declared" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginBottom: 28 }}>
+                <StatCard label="MCP Servers" value={serversData.total} sub="configured" onClick={onNavigateServers} />
+                <StatCard label="Tools Tracked" value={discoveredTools} sub="via MCP servers" />
             </div>
 
             {health.warnings?.length > 0 && (
@@ -41,51 +33,25 @@ export function Dashboard({ health, agentsData, serversData }) {
                 </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <Card>
-                    <CardHead>Agent Fleet</CardHead>
-                    {agents.map((agent, i) => (
-                        <div key={agent.id} style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "12px 18px",
-                            borderBottom: i < agents.length - 1 ? "1px solid var(--border)" : "none",
-                        }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <Dot on={agent.status === "active"} />
-                                <span style={{ fontWeight: 500, fontSize: 13, color: "var(--cream)" }}>{agent.name}</span>
-                                {agent.background && <Tag color="var(--orange)">bg</Tag>}
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-                                <span style={{ fontFamily: "Menlo, Consolas, monospace", color: "var(--text2)" }}>
-                                    {agent.total_tools}{agent.total_tools === 1 ? " tool" : " tools"} · {agent.servers?.length || 0}{agent.servers?.length === 1 ? " server" : " servers"}
-                                </span>
-                                {agent.policy_engine ? <Tag color="var(--lime-dim)">{agent.policy_engine}</Tag> : <Tag>no policy</Tag>}
-                            </div>
+            <Card>
+                <CardHead>MCP Servers</CardHead>
+                {servers.map((srv, i) => (
+                    <div key={srv.id} onClick={() => onNavigateToServer(srv.id)} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 18px",
+                        borderBottom: i < servers.length - 1 ? "1px solid var(--border)" : "none",
+                        cursor: "pointer",
+                    }}>
+                        <div>
+                            <div style={{ fontWeight: 500, fontSize: 13, color: "var(--cream)" }}>{srv.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{srv.description}</div>
                         </div>
-                    ))}
-                </Card>
-
-                <Card>
-                    <CardHead>MCP Servers</CardHead>
-                    {servers.map((srv, i) => (
-                        <div key={srv.id} style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "12px 18px",
-                            borderBottom: i < servers.length - 1 ? "1px solid var(--border)" : "none",
-                        }}>
-                            <div>
-                                <div style={{ fontWeight: 500, fontSize: 13, color: "var(--cream)" }}>{srv.name}</div>
-                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>{srv.description}</div>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-                                <span style={{ fontFamily: "Menlo, Consolas, monospace", color: "var(--text3)" }}>{srv.transport}</span>
-                                <span style={{ color: "var(--border2)" }}>·</span>
-                                <span style={{ color: "var(--text2)" }}>{srv.agent_count} agents</span>
-                            </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+                            <span style={{ fontFamily: "Menlo, Consolas, monospace", color: "var(--text3)" }}>{srv.transport}</span>
                         </div>
-                    ))}
-                </Card>
-            </div>
+                    </div>
+                ))}
+            </Card>
         </div>
     )
 }
