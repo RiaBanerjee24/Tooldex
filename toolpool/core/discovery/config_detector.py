@@ -201,25 +201,26 @@ def detect_all(
     if not auto_detect:
         return result
 
-    # ── 2. Claude Code user-level (~/.claude.json) ────────────────────────────
+    # ── 2. Claude Code global (~/.claude.json) ────────────────────────────────
     source = _read_claude_json(cwd, env=env)
     if source is not None:
         result.sources.append(source)
         _merge_servers(result, source, client="claude_code_user")
 
-    # ── 3. Codex project-level (<project>/.codex/config) ─────────────────────
+    # ── 3. Codex project (<project>/.codex/config.toml) ──────────────────────
     project_codex = codex_project_path(cwd)
     if project_codex is not None:
         source = _read_codex_toml(project_codex, client="codex_project", env=env)
         result.sources.append(source)
         _merge_servers(result, source, client="codex_project")
 
-    # ── 4. Codex user-level (~/.codex/config.toml) ───────────────────────────
+    # ── 4. Codex global (~/.codex/config.toml) ───────────────────────────────
     source = _read_codex_toml(codex_user_path(), client="codex", env=env)
     result.sources.append(source)
     _merge_servers(result, source, client="codex")
 
-    # ── 5. JSON-based clients (Claude Desktop, Cursor, Windsurf) ─────────────
+    # ── 5. JSON-based clients (Claude Desktop, Claude Code project, Cursor, Windsurf)
+    # walk_up_for() stops at home so project paths can never resolve to global files.
     priority_index = {c: i for i, c in enumerate(CLIENT_PRIORITY)}
     plan = sorted(build_plan(cwd), key=lambda item: priority_index.get(item[0], 999))
 
@@ -238,9 +239,6 @@ def detect_all(
         _merge_servers(result, source, client=client)
 
     # ── 6. Docker MCP Toolkit profiles ───────────────────────────────────────
-    # Tools are embedded in the profile snapshot, so no live probing is needed
-    # for these servers. read_all_docker_mcp_profiles() returns [] silently
-    # when docker / the mcp plugin is not installed.
     for source in read_all_docker_mcp_profiles():
         result.sources.append(source)
         _merge_servers(result, source, client=source.client)
@@ -257,19 +255,19 @@ def _merge_servers(
     source: DiscoverySource,
     client: str,
 ) -> None:
-    """Merge a source's servers into result. First-sighting-wins on conflicts."""
+    """
+    Add a source's servers into result, keyed by "{client}:{server_id}".
+
+    Dedup rules:
+    - Same (client, server_id): first-sighting wins. Within a single client
+      source, global-scope entries are yielded before project-scope entries
+      (see parse_claude_json), so global naturally takes precedence.
+    - Different clients with the same server name are independent entries —
+      claude_code_user:filesystem and cursor_user:filesystem are both kept.
+    """
     for server in source.servers:
-        if server.id in result.servers:
-            prior = _owner_of(result, server.id)
-            result.duplicates.append(
-                f"{client}:{server.id} already defined by {prior}"
+        qualified_id = f"{client}:{server.id}"
+        if qualified_id not in result.servers:
+            result.servers[qualified_id] = server.model_copy(
+                update={"client": client, "id": qualified_id}
             )
-            continue
-        result.servers[server.id] = server.model_copy(update={"client": client})
-
-
-def _owner_of(result: ConfigDetectionResult, server_id: str) -> str:
-    for src in result.sources:
-        if any(s.id == server_id for s in src.servers):
-            return src.client
-    return "unknown"

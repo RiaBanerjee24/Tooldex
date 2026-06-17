@@ -99,6 +99,9 @@ def parse_mcp_servers(
                 server_id, source_path, type(spec).__name__,
             )
             continue
+        if spec.get("disabled"):
+            logger.debug("Skipping disabled server %r in %s", server_id, source_path)
+            continue
         try:
             results.append(_spec_to_server(server_id, spec, env))
         except Exception as exc:
@@ -118,9 +121,19 @@ def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServe
     if command:
         transport = "stdio"
     elif url:
-        transport = spec.get("type") or spec.get("transport") or "sse"
+        raw = (spec.get("type") or spec.get("transport") or "").lower().replace("-", "_")
+        transport = "sse" if raw == "sse" else "http"
     else:
         raise ValueError("server has neither `command` nor `url`")
+
+    headers_raw = dict(spec.get("headers") or {})
+
+    # Codex stores auth as bearer_token_env_var — either an env var name or a
+    # literal token value. Try to resolve as env var first, fall back to literal.
+    bearer_ref = spec.get("bearer_token_env_var")
+    if bearer_ref and isinstance(bearer_ref, str):
+        token = env.get(bearer_ref, bearer_ref)
+        headers_raw.setdefault("Authorization", f"Bearer {token}")
 
     return MCPServer(
         id=server_id,
@@ -129,6 +142,7 @@ def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServe
         command=resolve_env_refs(command, env) if command else None,
         args=resolve_list(args_raw, env) if isinstance(args_raw, list) else [],
         env=resolve_dict(env_raw, env) if isinstance(env_raw, dict) else {},
+        headers=resolve_dict(headers_raw, env) if isinstance(headers_raw, dict) else {},
         url=resolve_env_refs(url, env) if url else None,
         description=description,
     )

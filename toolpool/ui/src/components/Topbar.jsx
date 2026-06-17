@@ -49,7 +49,7 @@ export function Topbar({ tab, setTab, health }) {
                     </div>
 
                     {/* Status pill */}
-                    {health && (
+                    {/* {health && (
                         <div style={{
                             display: "flex", alignItems: "center", gap: 8,
                             padding: "5px 13px", borderRadius: "var(--radius)",
@@ -59,7 +59,7 @@ export function Topbar({ tab, setTab, health }) {
                             <Dot on={health.status === "ok"} />
                             {health.config?.name}
                         </div>
-                    )}
+                    )} */}
                 </div>
             </Wrap>
         </div>

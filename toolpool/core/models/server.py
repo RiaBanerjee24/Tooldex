@@ -24,6 +24,7 @@ class MCPServer(BaseModel):
     command: Optional[str] = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+    headers: dict[str, str] = Field(default_factory=dict)
     url: Optional[str] = None
     description: Optional[str] = None
 

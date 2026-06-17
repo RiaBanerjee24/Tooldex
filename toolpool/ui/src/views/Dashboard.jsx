@@ -11,9 +11,9 @@ export function Dashboard({ health, serversData, onNavigateServers, onNavigateTo
                 <h1 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 36, color: "var(--cream)", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
                     Overview
                 </h1>
-                <div style={{ color: "var(--text3)", fontSize: 12, fontFamily: "Menlo, Consolas, monospace", marginTop: 6 }}>
+                {/* <div style={{ color: "var(--text3)", fontSize: 12, fontFamily: "Menlo, Consolas, monospace", marginTop: 6 }}>
                     {health.config?.name} · {health.config?.owner}
-                </div>
+                </div> */}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginBottom: 28 }}>
@@ -35,11 +35,11 @@ export function Dashboard({ health, serversData, onNavigateServers, onNavigateTo
 
             <Card>
                 <CardHead>MCP Servers</CardHead>
-                {servers.map((srv, i) => (
+                {servers.slice(0, 5).map((srv, i) => (
                     <div key={srv.id} onClick={() => onNavigateToServer(srv.id)} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         padding: "12px 18px",
-                        borderBottom: i < servers.length - 1 ? "1px solid var(--border)" : "none",
+                        borderBottom: "1px solid var(--border)",
                         cursor: "pointer",
                     }}>
                         <div>
@@ -51,6 +51,20 @@ export function Dashboard({ health, serversData, onNavigateServers, onNavigateTo
                         </div>
                     </div>
                 ))}
+                {servers.length > 5 && (
+                    <div onClick={onNavigateServers} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "11px 18px", cursor: "pointer",
+                        background: "var(--surface2)",
+                    }}>
+                        <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace" }}>
+                            +{servers.length - 5} more
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--yellow-muted)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em" }}>
+                            View All →
+                        </span>
+                    </div>
+                )}
             </Card>
         </div>
     )

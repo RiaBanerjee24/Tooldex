@@ -28,12 +28,6 @@ def print_summary(
         if src.error:
             typer.echo(f"     └─ {typer.style(src.error, fg='red', dim=True)}")
 
-    if config_result.duplicates:
-        typer.echo("")
-        typer.echo(typer.style("Duplicates (first sighting wins)", bold=True))
-        for dup in config_result.duplicates:
-            typer.echo(f"  ⚠  {dup}")
-
     typer.echo("")
     typer.echo(typer.style("Servers & tools", bold=True))
     if not config_result.servers:
@@ -42,15 +36,16 @@ def print_summary(
         tools_by_server = {r.server_id: r for r in tool_results}
         for server_id, server in config_result.servers.items():
             result = tools_by_server.get(server_id)
+            display = server.name or server_id
             if result is None:
-                typer.echo(f"  •  {server_id}  (probe skipped)")
+                typer.echo(f"  •  {display}  (probe skipped)")
                 continue
             symbol, color = _status_symbol(result.status.value)
             if result.ok:
                 dur = f"{result.duration_ms}ms" if result.duration_ms else ""
                 typer.echo(
                     f"  {typer.style(symbol, fg=color)}  "
-                    f"{server_id:<22} {len(result.tools)} tools "
+                    f"{display:<22} {len(result.tools)} tools "
                     f"{typer.style(dur, dim=True)}"
                 )
                 for tool in result.tools:
@@ -59,7 +54,7 @@ def print_summary(
             else:
                 typer.echo(
                     f"  {typer.style(symbol, fg=color)}  "
-                    f"{server_id:<22} {result.status.value}"
+                    f"{display:<22} {result.status.value}"
                 )
                 if result.error:
                     typer.echo(f"     └─ {typer.style(result.error, fg='red', dim=True)}")
