@@ -2,8 +2,7 @@ import { useState, useEffect } from "react"
 import { api } from "../api.js"
 import { useFetch } from "../hooks/useFetch.js"
 import {
-    Tag, RiskBadge, AccessBadge, Card, CardHead, Empty, Spinner, Err, SidebarBtn,
-    ProvenanceDot,
+    Tag, Card, CardHead, Empty, Spinner, Err, SidebarBtn, ProvenanceDot,
 } from "../components/ui.jsx"
 
 // ---------------------------------------------------------------------------
@@ -281,32 +280,6 @@ export function Servers({ initialSel }) {
                             }
                         </Card>
 
-                        <Card>
-                            <CardHead>Connected Agents</CardHead>
-                            {!detail.agents_connected?.length
-                                ? <Empty msg="no agents connected" />
-                                : detail.agents_connected?.map((agent, ai) => (
-                                    <div key={ai} style={{ borderBottom: ai < detail.agents_connected.length - 1 ? "1px solid var(--border)" : "none" }}>
-                                        <div style={{ padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)", fontWeight: 500, fontSize: 13, color: "var(--cream)" }}>
-                                            {agent.name}
-                                        </div>
-                                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                                            <tbody>
-                                                {agent.tools?.map((tool, ti) => (
-                                                    <tr key={ti} style={{ borderBottom: "1px solid var(--border)" }}>
-                                                        <td style={{ padding: "10px 18px", width: 220 }}>
-                                                            <span style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 12, color: "var(--cream)" }}>{tool.name}</span>
-                                                        </td>
-                                                        <td style={{ padding: "10px 18px", width: 100 }}><RiskBadge risk={tool.risk} /></td>
-                                                        <td style={{ padding: "10px 18px" }}><AccessBadge access={tool.effective_access} /></td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ))
-                            }
-                        </Card>
                     </div>
                 )}
             </div>
