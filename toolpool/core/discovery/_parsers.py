@@ -110,6 +110,26 @@ def parse_mcp_servers(
     return results
 
 
+def _infer_package(command: str | None, args: list[str]) -> str | None:
+    if not command:
+        return None
+    cmd = Path(command).name  # handle absolute paths like /usr/bin/npx
+    if cmd == "npx":
+        # npx [-y] [--] <package> [package-args...]  — skip flags, take first positional
+        for arg in args:
+            if not arg.startswith("-"):
+                return arg
+    elif cmd == "uvx":
+        # uvx [--from <pkg>] <entrypoint> — --from is the canonical package name
+        for i, arg in enumerate(args):
+            if arg == "--from" and i + 1 < len(args):
+                return args[i + 1]
+        for arg in args:
+            if not arg.startswith("-"):
+                return arg
+    return None
+
+
 def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServer:
     """Build one MCPServer from one mcpServers entry."""
     command = spec.get("command")
@@ -135,15 +155,18 @@ def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServe
         token = env.get(bearer_ref, bearer_ref)
         headers_raw.setdefault("Authorization", f"Bearer {token}")
 
+    resolved_args = resolve_list(args_raw, env) if isinstance(args_raw, list) else []
+
     return MCPServer(
         id=server_id,
         name=server_id,
         transport=transport,
         command=resolve_env_refs(command, env) if command else None,
-        args=resolve_list(args_raw, env) if isinstance(args_raw, list) else [],
+        args=resolved_args,
         env=resolve_dict(env_raw, env) if isinstance(env_raw, dict) else {},
         headers=resolve_dict(headers_raw, env) if isinstance(headers_raw, dict) else {},
         url=resolve_env_refs(url, env) if url else None,
+        package=_infer_package(command, resolved_args),
         description=description,
     )
 
