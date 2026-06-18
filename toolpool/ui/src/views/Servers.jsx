@@ -34,6 +34,27 @@ function classifyClient(client) {
     return CLIENT_META[client] || { group: client, label: client, scope: null }
 }
 
+const CONNECTION_STATUS = {
+    connected:  { label: "connected",  color: "var(--lime)",        bg: "var(--lime-bg)",   border: "var(--lime-border)" },
+    failed:     { label: "failed",     color: "var(--red)",         bg: "var(--red-bg)",    border: "var(--red-border)" },
+    needs_auth: { label: "needs auth", color: "var(--yellow-muted)", bg: "var(--orange-bg)", border: "var(--orange-border)" },
+}
+
+function ConnectionStatusBadge({ status }) {
+    if (!status) return null
+    const c = CONNECTION_STATUS[status]
+    if (!c) return null
+    return (
+        <span style={{
+            padding: "1px 6px", borderRadius: 3,
+            border: `1px solid ${c.border}`,
+            fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase",
+            color: c.color, background: c.bg,
+            fontFamily: "Menlo, Consolas, monospace", flexShrink: 0,
+        }}>{c.label}</span>
+    )
+}
+
 function ScopeTag({ scope }) {
     if (!scope) return null
     const isProject = scope === "project"
@@ -173,8 +194,12 @@ export function Servers({ initialSel }) {
             <div style={{ display: "grid", gridTemplateColumns: "210px 1fr", gap: 14, alignItems: "start" }}>
 
                 {/* Sidebar */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                    {/* Search */}
+                <div style={{
+                    display: "flex", flexDirection: "column",
+                    position: "sticky", top: 56,
+                    maxHeight: "calc(100vh - 72px)",
+                }}>
+                    {/* Search — pinned, never scrolls */}
                     <input
                         type="text"
                         placeholder={activeVendor ? `Search in ${activeVendor}…` : "Search all servers…"}
@@ -185,10 +210,12 @@ export function Servers({ initialSel }) {
                             background: "var(--surface2)", border: "1px solid var(--border)",
                             borderRadius: "var(--radius)", color: "var(--cream)",
                             fontSize: 12, fontFamily: "Menlo, Consolas, monospace",
-                            outline: "none", boxSizing: "border-box",
+                            outline: "none", boxSizing: "border-box", flexShrink: 0,
                         }}
                     />
 
+                    {/* Server list — scrolls independently */}
+                    <div style={{ overflowY: "auto", flex: 1 }}>
                     {filteredGroups.length === 0
                         ? <div style={{ padding: "18px 10px", fontSize: 11, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace" }}>no results</div>
                         : filteredGroups.map((group, gi) => (
@@ -214,6 +241,7 @@ export function Servers({ initialSel }) {
                                                 <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginTop: 2 }}>
                                                     <span>{s.agent_count}a · {s.transport}</span>
                                                     <ScopeTag scope={scope} />
+                                                    <ConnectionStatusBadge status={s.connection_status} />
                                                 </div>
                                             </SidebarBtn>
                                         )
@@ -222,6 +250,7 @@ export function Servers({ initialSel }) {
                             </div>
                         ))
                     }
+                    </div>
                 </div>
 
                 {/* Detail panel */}
@@ -233,8 +262,15 @@ export function Servers({ initialSel }) {
                                     <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", margin: 0 }}>
                                         {detail.name}
                                     </h2>
+                                    <ConnectionStatusBadge status={detail.connection_status} />
                                 </div>
-                                <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 16 }}>{detail.description}</p>
+                                {detail.description && <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>{detail.description}</p>}
+                                {detail.raw_connection_status && (
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                                        <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>status msg</span>
+                                        <span style={{ fontSize: 11, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace" }}>{detail.raw_connection_status}</span>
+                                    </div>
+                                )}
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
                                     {[
                                         ["Transport", detail.transport],
