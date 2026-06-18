@@ -34,3 +34,9 @@ class MCPServer(BaseModel):
     # Which MCP client config this server was read from (e.g. "claude_code_user",
     # "cursor_project", "docker_mcp:toolpool"). Set by config_detector._merge_servers.
     client: Optional[str] = None
+
+    # Live connection status derived from the client's CLI.
+    # "connected" | "failed" | "needs_auth" | None
+    connection_status: Optional[str] = None
+    # Raw status string from the CLI — e.g. "not loaded (needs approval)"
+    raw_connection_status: Optional[str] = None

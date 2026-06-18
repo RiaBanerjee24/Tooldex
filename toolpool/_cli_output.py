@@ -29,7 +29,7 @@ def print_summary(
             typer.echo(f"     └─ {typer.style(src.error, fg='red', dim=True)}")
 
     typer.echo("")
-    typer.echo(typer.style("Servers & tools", bold=True))
+    typer.echo(typer.style("Servers", bold=True))
     if not config_result.servers:
         typer.echo("  (none discovered)")
     else:
@@ -38,19 +38,15 @@ def print_summary(
             result = tools_by_server.get(server_id)
             display = server.name or server_id
             if result is None:
-                typer.echo(f"  •  {display}  (probe skipped)")
+                typer.echo(f"  •  {display:<22}  (probe skipped)")
                 continue
             symbol, color = _status_symbol(result.status.value)
             if result.ok:
-                dur = f"{result.duration_ms}ms" if result.duration_ms else ""
+                dur = f"  {typer.style(str(result.duration_ms) + 'ms', dim=True)}" if result.duration_ms else ""
                 typer.echo(
                     f"  {typer.style(symbol, fg=color)}  "
-                    f"{display:<22} {len(result.tools)} tools "
-                    f"{typer.style(dur, dim=True)}"
+                    f"{display:<22} {len(result.tools)} tools{dur}"
                 )
-                for tool in result.tools:
-                    desc = (tool.description or "").split("\n")[0][:60]
-                    typer.echo(f"       · {tool.name}  {typer.style(desc, dim=True)}")
             else:
                 typer.echo(
                     f"  {typer.style(symbol, fg=color)}  "

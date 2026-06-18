@@ -4,7 +4,11 @@ Toolpool CLI — `run` reads toolpool.yml, `discover` autodiscovers everything.
 """
 import json as _json
 import logging
+import os
 import socket
+import sys
+import threading
+import time
 import uvicorn
 import typer
 from typing import Optional
@@ -71,6 +75,69 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s  %(name)s  %(message)s"
 )
+
+# ---------------------------------------------------------------------------
+# Preferences store  (~/.toolpool/preferences.json)
+# ---------------------------------------------------------------------------
+
+def _prefs_path() -> Path:
+    return Path.home() / ".toolpool" / "preferences.json"
+
+def _load_prefs() -> dict:
+    p = _prefs_path()
+    if not p.exists():
+        return {}
+    try:
+        return _json.loads(p.read_text())
+    except Exception:
+        return {}
+
+def _save_pref(key: str, value) -> None:
+    p = _prefs_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    prefs = _load_prefs()
+    prefs[key] = value
+    p.write_text(_json.dumps(prefs, indent=2))
+
+
+# ---------------------------------------------------------------------------
+# Discovery spinner  ("toolpooling  3s")
+# ---------------------------------------------------------------------------
+
+class _Spinner:
+    """Runs a background thread that prints a seconds counter directly to the tty."""
+
+    def __init__(self):
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._tick, daemon=True)
+
+    def _tick(self):
+        try:
+            tty = open("/dev/tty", "w")
+        except OSError:
+            return
+        start = time.monotonic()
+        try:
+            while not self._stop.is_set():
+                s = int(time.monotonic() - start)
+                tty.write(f"\r  toolpooling  {s}s ")
+                tty.flush()
+                time.sleep(0.25)
+        finally:
+            tty.close()
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        self._thread.join()
+        try:
+            with open("/dev/tty", "w") as tty:
+                tty.write("\r" + " " * 30 + "\r")
+                tty.flush()
+        except OSError:
+            pass
 
 cli = typer.Typer(
     help="Toolpool — AI Agent Permission Observatory",
@@ -259,19 +326,84 @@ def discover(
         )
         raise typer.Exit(2)
 
-    # ── phase 1: config detection ────────────────────────────────────────────
-    config_result = detect_all(
-        custom_paths=config_paths,
-        auto_detect=not no_auto_detect,
-    )
+    # ── permissions: agent CLI status commands ───────────────────────────────
+    prefs = _load_prefs()
+    interactive = sys.stdin.isatty() and not as_json
 
-    # ── phase 2: probe each discovered server for its tools ──────────────────
-    tool_results = []
-    if not skip_probe and config_result.servers:
-        servers = list(config_result.servers.values())
-        tool_results = list_tools_for_all(
-            servers, timeout=timeout, concurrency=concurrency,
+    def _ask_permission(cli_cmd: str, pref_key: str) -> bool:
+        stored = prefs.get(pref_key)
+        if stored is True:
+            return True
+        if not interactive:
+            return False
+        typer.echo(f"\n  Toolpool wants to run `{cli_cmd}` to show live connection status.\n")
+        typer.echo("    1  Yes")
+        typer.echo("    2  Yes, for entire session")
+        typer.echo("    3  No\n")
+        while True:
+            choice = typer.prompt("  Choice", default="1").strip()
+            if choice == "1":
+                typer.echo("")
+                return True
+            if choice == "2":
+                typer.echo("")
+                _save_pref(pref_key, True)
+                return True
+            if choice == "3":
+                typer.echo("")
+                return False
+            typer.echo("  Please enter 1, 2, or 3.")
+
+    allow_claude_status  = _ask_permission("claude mcp list",       "allow_claude_mcp_list")
+    allow_codex_status   = _ask_permission("codex mcp list",        "allow_codex_mcp_list")
+    allow_cursor_status  = _ask_permission("cursor-agent mcp list", "allow_cursor_mcp_list")
+
+    # ── phases 1 & 2: detect + probe (quiet, with counter) ───────────────────
+    root_logger = logging.getLogger()
+    orig_level = root_logger.level
+    root_logger.setLevel(logging.WARNING)
+
+    _is_tty = sys.stdout.isatty() and not as_json
+
+    # Redirect raw stdout/stderr fds to /dev/null so subprocess noise
+    # (Docker MCP gateway, mcp-remote, MCP server startup messages) is
+    # silenced. The spinner writes directly to /dev/tty, bypassing these fds.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    _saved_out = os.dup(1)
+    _saved_err = os.dup(2)
+    _devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(_devnull, 1)
+    os.dup2(_devnull, 2)
+    os.close(_devnull)
+
+    spinner = _Spinner()
+    if _is_tty:
+        spinner.start()
+
+    try:
+        config_result = detect_all(
+            custom_paths=config_paths,
+            auto_detect=not no_auto_detect,
+            allow_claude_status=allow_claude_status,
+            allow_codex_status=allow_codex_status,
+            allow_cursor_status=allow_cursor_status,
         )
+
+        tool_results = []
+        if not skip_probe and config_result.servers:
+            servers = list(config_result.servers.values())
+            tool_results = list_tools_for_all(
+                servers, timeout=timeout, concurrency=concurrency,
+            )
+    finally:
+        spinner.stop()
+        root_logger.setLevel(orig_level)
+        # Restore stdout/stderr before printing summary
+        os.dup2(_saved_out, 1)
+        os.close(_saved_out)
+        os.dup2(_saved_err, 2)
+        os.close(_saved_err)
 
     # ── output ───────────────────────────────────────────────────────────────
     if as_json:

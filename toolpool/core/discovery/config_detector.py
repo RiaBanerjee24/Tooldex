@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -167,6 +168,9 @@ def detect_all(
     env: Optional[dict[str, str]] = None,
     custom_paths: Optional[list[Path]] = None,
     auto_detect: bool = True,
+    allow_claude_status: bool = True,
+    allow_codex_status: bool = True,
+    allow_cursor_status: bool = True,
 ) -> ConfigDetectionResult:
     """
     Check config locations and return an aggregate of discovered servers.
@@ -243,7 +247,179 @@ def detect_all(
         result.sources.append(source)
         _merge_servers(result, source, client=source.client)
 
+    # ── 7. Enrich Claude-sourced servers via `claude mcp list` ───────────────
+    if allow_claude_status:
+        claude_statuses = _fetch_claude_status()
+        for qid, server in result.servers.items():
+            if server.client and server.client.startswith("claude_code"):
+                status = claude_statuses.get(server.name)
+                if status:
+                    result.servers[qid] = server.model_copy(
+                        update={"connection_status": status, "raw_connection_status": status}
+                    )
+
+    # ── 8. Enrich Codex-sourced servers via `codex mcp list` ─────────────────
+    if allow_codex_status:
+        codex_statuses = _fetch_codex_status()
+        for qid, server in result.servers.items():
+            if server.client and server.client.startswith("codex"):
+                status = codex_statuses.get(server.name)
+                if status:
+                    result.servers[qid] = server.model_copy(
+                        update={"connection_status": status, "raw_connection_status": status}
+                    )
+
+    # ── 9. Enrich Cursor-sourced servers via `cursor-agent mcp list` ──────────
+    if allow_cursor_status:
+        cursor_statuses = _fetch_cursor_status()
+        for qid, server in result.servers.items():
+            if server.client and server.client.startswith("cursor"):
+                entry = cursor_statuses.get(server.name)
+                if entry:
+                    status, raw = entry
+                    result.servers[qid] = server.model_copy(
+                        update={"connection_status": status, "raw_connection_status": raw}
+                    )
+
     return result
+
+
+# ---------------------------------------------------------------------------
+# Claude live-status enrichment
+# ---------------------------------------------------------------------------
+
+def _fetch_claude_status() -> dict[str, str]:
+    """
+    Run `claude mcp list` and return {server_name: status}.
+
+    Output format (one server per line):
+        name: command/url - ✔ Connected
+        name: command/url - ✘ Failed to connect
+        name: command/url - ! Needs authentication
+
+    Returns an empty dict if `claude` is not on PATH or the command times out.
+    """
+    try:
+        proc = subprocess.run(
+            ["claude", "mcp", "list"],
+            capture_output=True, text=True, timeout=15,
+        )
+        output = proc.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return {}
+
+    statuses: dict[str, str] = {}
+    for line in output.splitlines():
+        line = line.strip()
+        if not line or " - " not in line:
+            continue
+        name_cmd, _, status_raw = line.rpartition(" - ")
+        name = name_cmd.split(": ", 1)[0].strip()
+        if not name:
+            continue
+        s = status_raw.strip()
+        if s.startswith("✔"):
+            statuses[name] = "connected"
+        elif s.startswith("✘"):
+            statuses[name] = "failed"
+        elif s.startswith("!"):
+            statuses[name] = "needs_auth"
+
+    return statuses
+
+
+def _fetch_cursor_status() -> dict[str, tuple[str, str]]:
+    """
+    Run `cursor-agent mcp list` and return {server_name: (status, raw_string)}.
+
+    Output format:
+        browserbase: not loaded (needs approval)
+        filesystem: running
+
+    Status mapping:
+        contains "running" or "connected" → "connected"
+        contains "needs approval"         → "needs_auth"
+        anything else                     → "failed"
+    """
+    try:
+        proc = subprocess.run(
+            ["cursor-agent", "mcp", "list"],
+            capture_output=True, text=True, timeout=15,
+        )
+        output = proc.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return {}
+
+    result: dict[str, tuple[str, str]] = {}
+    for line in output.splitlines():
+        line = line.strip()
+        if not line or ": " not in line:
+            continue
+        name, _, raw = line.partition(": ")
+        name = name.strip()
+        raw = raw.strip()
+        if not name or not raw:
+            continue
+        low = raw.lower()
+        if "running" in low or "connected" in low:
+            status = "connected"
+        elif "needs approval" in low or "needs_auth" in low:
+            status = "needs_auth"
+        else:
+            status = "failed"
+        result[name] = (status, raw)
+    return result
+
+
+def _fetch_codex_status() -> dict[str, str]:
+    """
+    Run `codex mcp list` and return {server_name: status}.
+
+    Output is a fixed-width table with two sections (stdio + HTTP), each
+    with its own header row. The Status column position is read from each
+    header so column shifts between sections are handled correctly.
+
+        Name        Command  Args  ...  Status   Auth
+        MCP_DOCKER  docker   ...        enabled  Unsupported
+
+    "enabled" → "connected"; anything else → "failed".
+    """
+    try:
+        proc = subprocess.run(
+            ["codex", "mcp", "list"],
+            capture_output=True, text=True, timeout=15,
+        )
+        output = proc.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return {}
+
+    statuses: dict[str, str] = {}
+    status_col: int | None = None
+
+    for line in output.splitlines():
+        if not line.strip():
+            status_col = None  # blank line separates table sections — reset
+            continue
+
+        if "Name" in line and "Status" in line:
+            status_col = line.index("Status")
+            continue
+
+        if status_col is None:
+            continue
+
+        parts = line.split()
+        if not parts:
+            continue
+        name = parts[0]
+
+        if len(line) > status_col:
+            after = line[status_col:].split()
+            if after:
+                raw = after[0].lower()
+                statuses[name] = "connected" if raw == "enabled" else "failed"
+
+    return statuses
 
 
 # ---------------------------------------------------------------------------
