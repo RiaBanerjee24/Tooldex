@@ -35,6 +35,11 @@ class MCPServer(BaseModel):
     # "cursor_project", "docker_mcp:toolpool"). Set by config_detector._merge_servers.
     client: Optional[str] = None
 
+    # Config file this server was read from (e.g. "~/.claude.json")
+    source_path: Optional[str] = None
+    # For project-scoped servers: the project root directory
+    project_path: Optional[str] = None
+
     # Live connection status derived from the client's CLI.
     # "connected" | "failed" | "needs_auth" | None
     connection_status: Optional[str] = None

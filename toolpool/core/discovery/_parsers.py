@@ -181,13 +181,18 @@ def parse_claude_json(
     Parse ~/.claude.json which holds two kinds of mcpServers:
 
     - Top-level raw["mcpServers"]: user-scoped, apply to every project.
-    - raw["projects"][<project-path>]["mcpServers"]: project-scoped, only
-      relevant when `cwd` is inside that project.
+    - raw["projects"][<project-path>]["mcpServers"]: project-scoped servers
+      for each project the user has opened with Claude Code.
 
-    We pick the single project entry whose path is `cwd` or the closest
-    ancestor of it — Claude Code keys `projects` by absolute project root.
+    We return servers from ALL projects so the UI can show every configured
+    server regardless of which directory toolpool was run from. Each
+    project-scoped server has its project_path set so the caller can:
+      - build a unique qualified ID per (project, server_id) pair
+      - display the source project in the detail panel
+      - run `claude mcp list` from the right directory for status enrichment
     """
-    servers = []
+    env = env if env is not None else dict(os.environ)
+    servers: list[MCPServer] = []
 
     if isinstance(raw.get("mcpServers"), dict):
         servers.extend(parse_mcp_servers(raw, source_path, env=env))
@@ -196,24 +201,20 @@ def parse_claude_json(
     if not isinstance(projects, dict):
         return servers
 
-    cwd = cwd.resolve()
-    best_match: Optional[str] = None
-    best_depth = -1
-    for project_path in projects:
+    cwd_path = Path(cwd).resolve()
+    for proj_path, proj_data in projects.items():
+        if not isinstance(proj_data, dict):
+            continue
+        # Only include project-scoped servers on the walk-up path from CWD:
+        # the project dir must be exactly CWD or an ancestor of CWD.
         try:
-            p = Path(project_path).resolve()
-        except OSError:
+            proj = Path(proj_path).resolve()
+        except Exception:
             continue
-        if cwd != p and p not in cwd.parents:
+        if proj != cwd_path and proj not in cwd_path.parents:
             continue
-        depth = len(p.parts)
-        if depth > best_depth:
-            best_depth = depth
-            best_match = project_path
-
-    if best_match is not None:
-        value = projects[best_match]
-        if isinstance(value, dict) and "mcpServers" in value:
-            servers.extend(parse_mcp_servers(value, source_path, env=env))
+        proj_servers = parse_mcp_servers(proj_data, source_path, env=env)
+        for srv in proj_servers:
+            servers.append(srv.model_copy(update={"project_path": proj_path}))
 
     return servers

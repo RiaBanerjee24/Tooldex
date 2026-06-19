@@ -4,6 +4,22 @@ from toolpool.core.parsers.parser import get_parser
 
 router = APIRouter()
 
+_SENSITIVE_HEADERS = frozenset({"authorization", "x-api-key", "x-auth-token", "x-secret"})
+
+
+def _redact_server(d: dict) -> dict:
+    """Replace values of sensitive HTTP headers with '***' before sending to the UI."""
+    headers = d.get("headers")
+    if not headers:
+        return d
+    return {
+        **d,
+        "headers": {
+            k: "***" if k.lower() in _SENSITIVE_HEADERS else v
+            for k, v in headers.items()
+        },
+    }
+
 
 @router.get("/servers")
 async def list_servers():
@@ -15,14 +31,14 @@ async def list_servers():
     for server_id, server in manifest.servers.items():
         # O(1) — precomputed at parse time
         agents_connected = manifest.server_agents_index.get(server_id, [])
-        result.append({
+        result.append(_redact_server({
             **server.model_dump(),
             "agents_connected": agents_connected,
             "agent_count": len(agents_connected),
             "discovered_tool_count": len(server.discovered_tools),
             "_conflicted": server_id in conflicted,
             "_warned": server_id in warned,
-        })
+        }))
 
     return {
         "servers": result,
@@ -92,9 +108,9 @@ async def get_server(server_id: str):
     conflicted = manifest.conflicted_ids("server")
     warned = manifest.warned_ids("server")
 
-    return {
+    return _redact_server({
         **server.model_dump(),
         "agents_connected": agents_connected,
         "_conflicted": server_id in conflicted,
         "_warned": server_id in warned,
-    }
+    })

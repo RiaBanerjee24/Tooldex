@@ -29,6 +29,14 @@ yarn-debug.log*
 yarn-error.log*
 
 
+# Test / lint caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
 # Logs
 logs/
 *.log

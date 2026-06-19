@@ -6,7 +6,7 @@ export function useFetch(fn, deps = []) {
     const [error, setError] = useState(null)
 
     const run = useCallback(async () => {
-        setLoading(true); setError(null)
+        setLoading(true); setError(null); setData(null)
         try { setData(await fn()) }
         catch (e) { setError(e.message) }
         finally { setLoading(false) }

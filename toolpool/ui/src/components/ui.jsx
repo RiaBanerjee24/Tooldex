@@ -235,7 +235,7 @@ export function Err({ msg }) {
 
 export function Wrap({ children }) {
     return (
-        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 32px", width: "100%" }}>
+        <div style={{ maxWidth: 1600, margin: "0 auto", padding: "0 40px", width: "100%" }}>
             {children}
         </div>
     )

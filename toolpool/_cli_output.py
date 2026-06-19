@@ -1,7 +1,7 @@
 """
 toolpool/_cli_output.py
 
-Formatting helpers for `toolpool discover` CLI output.
+Formatting helpers for `toolpool run` CLI output.
 
 Separate from cli.py so the command definitions stay readable and these
 display utilities can be tested / reused without touching the CLI wiring.
@@ -26,7 +26,9 @@ def print_summary(
         summary = _source_line_summary(src)
         typer.echo(f"  {typer.style(symbol, fg=color)}  {client} {summary}")
         if src.error:
-            typer.echo(f"     └─ {typer.style(src.error, fg='red', dim=True)}")
+            is_hard_error = src.status.value in ("parse_error", "read_error")
+            style_kw = {"fg": "red", "bold": True} if is_hard_error else {"fg": "red", "dim": True}
+            typer.echo(f"     └─ {typer.style(src.error, **style_kw)}")
 
     typer.echo("")
     typer.echo(typer.style("Servers", bold=True))
@@ -67,7 +69,6 @@ def print_summary(
 
 def result_as_json(
     config_result: ConfigDetectionResult,
-    tool_results: list[ToolDiscoveryResult],
 ) -> dict:
     """Machine-readable form for CI / scripts."""
     return {
@@ -78,6 +79,7 @@ def result_as_json(
                 "status": s.status.value,
                 "error": s.error,
                 "server_ids": [srv.id for srv in s.servers],
+                "in_file_duplicates": s.in_file_duplicates,
             }
             for s in config_result.sources
         ],
@@ -91,30 +93,19 @@ def result_as_json(
             }
             for sid, srv in config_result.servers.items()
         },
-        "tool_results": [
-            {
-                "server_id": r.server_id,
-                "status": r.status.value,
-                "error": r.error,
-                "duration_ms": r.duration_ms,
-                "tools": [
-                    {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-                    for t in r.tools
-                ],
-            }
-            for r in tool_results
-        ],
         "duplicates": config_result.duplicates,
     }
 
 
 def _status_symbol(status: str) -> tuple[str, str]:
-    good = {"found": ("✓", "green"), "empty": ("·", "yellow")}
-    if status in good:
-        return good[status]
-    if status == "not_found":
-        return ("✗", "white")
-    return ("✗", "red")
+    table = {
+        "found":       ("✓", "green"),
+        "empty":       ("·", "yellow"),
+        "not_found":   ("·", "white"),
+        "parse_error": ("✗", "red"),
+        "read_error":  ("✗", "red"),
+    }
+    return table.get(status, ("✗", "red"))
 
 
 def _source_line_summary(src) -> str:
@@ -123,5 +114,9 @@ def _source_line_summary(src) -> str:
     if src.status.value == "not_found":
         return typer.style(f"{src.path}  (not found)", dim=True)
     if src.status.value == "empty":
-        return typer.style(f"{src.path}  (no mcpServers)", dim=True)
+        return typer.style(f"{src.path}  (no servers)", dim=True)
+    if src.status.value == "parse_error":
+        return typer.style(f"{src.path}  (parse error)", fg="red")
+    if src.status.value == "read_error":
+        return typer.style(f"{src.path}  (read error)", fg="red")
     return typer.style(f"{src.path}  ({src.status.value})", fg="red", dim=True)

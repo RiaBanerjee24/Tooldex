@@ -3,7 +3,6 @@ toolpool/api/app.py
 FastAPI application factory.
 Registers all routers and serves the pre-built React UI.
 """
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,18 +21,13 @@ logger = logging.getLogger("toolpool.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # start watching toolpool.yml for changes in the background
-    watch_task = asyncio.create_task(get_parser().watch())
-    logger.info("toolpool started")
     yield
-    watch_task.cancel()
-    logger.info("toolpool stopped")   
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="toolpool",
-        description="AI Agent Permission Observatory",
+        description="Unified MCP Server Discovery",
         version=version,
         docs_url="/api/docs" if settings.debug else None,
         redoc_url="/api/redoc" if settings.debug else None,

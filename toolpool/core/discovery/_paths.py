@@ -1,7 +1,7 @@
 """
 toolpool/core/discovery/_paths.py
 
-Platform-aware path resolvers for every supported MCP client config file,
+Platform-aware path resolvers for supported MCP client config files,
 plus the priority ordering used when deduplicating server IDs across sources.
 
 Private module — imported only by config_detector.py.
@@ -15,19 +15,12 @@ accidentally return a global config file.
 
 Supported locations:
 
-    Claude Desktop      claude_desktop_config.json
-        macOS    ~/Library/Application Support/Claude/claude_desktop_config.json
-        Windows  %APPDATA%\\Claude\\claude_desktop_config.json
-        Linux    ~/.config/Claude/claude_desktop_config.json
-
     Claude Code         ~/.claude.json              (global)
                         <project>/.claude/mcp.json  (project, walk up, stops at ~)
                         <project>/.claude.json       (project, flat-file alternative)
 
     Cursor              ~/.cursor/mcp.json          (global)
                         <project>/.cursor/mcp.json  (project, walk up, stops at ~)
-
-    Windsurf            ~/.codeium/windsurf/mcp_config.json  (global only)
 
     Codex CLI           ~/.codex/config.toml        (global)
                         <project>/.codex/config.toml (project, walk up, stops at ~)
@@ -37,8 +30,6 @@ Supported locations:
 """
 from __future__ import annotations
 
-import os
-import sys
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -46,12 +37,10 @@ from typing import Callable, Optional
 # Priority order for display / source ordering.
 # Project-scoped configs come before their global counterparts.
 CLIENT_PRIORITY = (
-    "claude_desktop",
     "claude_code_project",
     "claude_code_user",
     "cursor_project",
     "cursor_user",
-    "windsurf",
     "codex_project",
     "codex",
     "mcp_json_project",
@@ -80,17 +69,6 @@ def walk_up_for(start: Path, parts: tuple[str, ...]) -> Optional[Path]:
         current = parent
 
 
-def claude_desktop_path() -> Path:
-    home = Path.home()
-    if sys.platform == "darwin":
-        return home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-    if sys.platform.startswith("win"):
-        appdata = os.environ.get("APPDATA")
-        base = Path(appdata) if appdata else home / "AppData" / "Roaming"
-        return base / "Claude" / "claude_desktop_config.json"
-    return home / ".config" / "Claude" / "claude_desktop_config.json"
-
-
 def claude_code_user_path() -> Path:
     return Path.home() / ".claude.json"
 
@@ -106,10 +84,6 @@ def cursor_user_path() -> Path:
 
 def cursor_project_path(cwd: Path) -> Optional[Path]:
     return walk_up_for(cwd, (".cursor", "mcp.json"))
-
-
-def windsurf_path() -> Path:
-    return Path.home() / ".codeium" / "windsurf" / "mcp_config.json"
 
 
 def codex_user_path() -> Path:
@@ -135,11 +109,9 @@ def build_plan(cwd: Path) -> list[tuple[str, Callable[[], Optional[Path]]]]:
     are handled separately in config_detector because they need custom parsers.
     """
     return [
-        ("claude_desktop",      claude_desktop_path),
         ("claude_code_project", lambda: claude_code_project_path(cwd)),
         ("cursor_project",      lambda: cursor_project_path(cwd)),
         ("cursor_user",         cursor_user_path),
-        ("windsurf",            windsurf_path),
         ("mcp_json_project",    lambda: mcp_json_project_path(cwd)),
         ("mcp_json_user",       mcp_json_user_path),
     ]

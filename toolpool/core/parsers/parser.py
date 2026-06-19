@@ -96,24 +96,6 @@ class ToolpoolParser:
     def on_reload(self, callback: Callable[[ToolpoolManifest], None]):
         self._reload_callbacks.append(callback)
 
-    async def watch(self):
-        try:
-            from watchfiles import awatch
-        except ImportError:
-            logger.warning(
-                "Hot reload disabled — install watchfiles: pip install watchfiles"
-            )
-            return
-
-        files_to_watch = [str(self.config_path)]
-        if self._manifest and self._manifest._loaded_files:
-            files_to_watch.extend(self._manifest._loaded_files)
-
-        logger.info(f"Watching {len(files_to_watch)} file(s) for changes...")
-        async for _ in awatch(*files_to_watch):
-            logger.info("File change detected — reloading")
-            self.reload()
-
     def validate_references(self) -> list[str]:
         """
         Post-load validation of cross-references.

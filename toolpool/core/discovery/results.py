@@ -85,12 +85,15 @@ class DiscoverySource:
 
     `servers` is empty for any status other than FOUND.
     `error` carries human-readable detail for PARSE_ERROR / READ_ERROR.
+    `in_file_duplicates` holds server IDs that appeared more than once as
+    JSON keys within this file (silently dropped by the JSON parser).
     """
     client: str                              # "claude_desktop", "cursor", ...
     path: str                                # resolved absolute path that was checked
     status: SourceStatus
     servers: list[MCPServer] = field(default_factory=list)
     error: Optional[str] = None
+    in_file_duplicates: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -105,10 +108,18 @@ class ConfigDetectionResult:
     `servers` is the deduplicated union across sources (same server id →
     first occurrence wins; later sources get dropped with a note attached
     to the DiscoverySource).
+    `duplicates` collects human-readable notes about:
+      - the same server name appearing in multiple clients
+      - duplicate JSON keys within a single config file
+    `_name_to_qid` is a private tracking dict (not serialised) used by
+    _merge() to detect cross-client name collisions.
     """
     sources: list[DiscoverySource] = field(default_factory=list)
     servers: dict[str, MCPServer] = field(default_factory=dict)
-    duplicates: list[str] = field(default_factory=list)  # "cursor:mysql-prod already defined by claude_desktop"
+    duplicates: list[str] = field(default_factory=list)
+    _name_to_qid: dict[str, str] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     # ── summary helpers for the CLI ──────────────────────────────────────────
 

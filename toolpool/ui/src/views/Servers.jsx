@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { api } from "../api.js"
 import { useFetch } from "../hooks/useFetch.js"
 import {
@@ -10,20 +10,18 @@ import {
 // ---------------------------------------------------------------------------
 
 const CLIENT_META = {
-    claude_desktop:       { group: "Claude",    label: "Claude Desktop", scope: null },
-    claude_code_user:     { group: "Claude",    label: "Claude Code",    scope: "global" },
-    claude_code_project:  { group: "Claude",    label: "Claude Code",    scope: "project" },
-    cursor_user:          { group: "Cursor",    label: "Cursor",         scope: "global" },
-    cursor_project:       { group: "Cursor",    label: "Cursor",         scope: "project" },
-    windsurf:             { group: "Windsurf",  label: "Windsurf",       scope: null },
-    codex:                { group: "Codex",     label: "Codex",          scope: "global" },
-    codex_project:        { group: "Codex",     label: "Codex",          scope: "project" },
-    mcp_json_user:        { group: "MCP JSON",  label: "MCP JSON",       scope: "global" },
-    mcp_json_project:     { group: "MCP JSON",  label: "MCP JSON",       scope: "project" },
-    custom:               { group: "Custom",    label: "Custom",         scope: null },
+    claude_code_user:     { group: "Claude",    label: "Claude Code",  scope: "global" },
+    claude_code_project:  { group: "Claude",    label: "Claude Code",  scope: "project" },
+    cursor_user:          { group: "Cursor",    label: "Cursor",       scope: "global" },
+    cursor_project:       { group: "Cursor",    label: "Cursor",       scope: "project" },
+    codex:                { group: "Codex",     label: "Codex",        scope: "global" },
+    codex_project:        { group: "Codex",     label: "Codex",        scope: "project" },
+    mcp_json_user:        { group: "MCP JSON",  label: "MCP JSON",     scope: "global" },
+    mcp_json_project:     { group: "MCP JSON",  label: "MCP JSON",     scope: "project" },
+    custom:               { group: "Custom",    label: "Custom",       scope: null },
 }
 
-const GROUP_ORDER = ["Claude", "Cursor", "Windsurf", "Codex", "MCP JSON", "Docker MCP", "Custom"]
+const GROUP_ORDER = ["Claude", "Cursor", "Codex", "MCP JSON", "Docker MCP", "Custom"]
 
 function classifyClient(client) {
     if (!client) return { group: "Unknown", label: "—", scope: null }
@@ -35,13 +33,18 @@ function classifyClient(client) {
 }
 
 const CONNECTION_STATUS = {
-    connected:  { label: "connected",  color: "var(--lime)",        bg: "var(--lime-bg)",   border: "var(--lime-border)" },
-    failed:     { label: "failed",     color: "var(--red)",         bg: "var(--red-bg)",    border: "var(--red-border)" },
-    needs_auth: { label: "needs auth", color: "var(--yellow-muted)", bg: "var(--orange-bg)", border: "var(--orange-border)" },
+    connected:  { label: "connected",  color: "var(--lime)",         bg: "var(--lime-bg)",    border: "var(--lime-border)" },
+    failed:     { label: "failed",     color: "var(--red)",          bg: "var(--red-bg)",     border: "var(--red-border)" },
+    needs_auth: { label: "needs auth", color: "var(--yellow-muted)", bg: "var(--orange-bg)",  border: "var(--orange-border)" },
+    enabled:    { label: "enabled",    color: "var(--lime)",         bg: "var(--lime-bg)",    border: "var(--lime-border)" },
+    disabled:   { label: "disabled",   color: "var(--red)",          bg: "var(--red-bg)",     border: "var(--red-border)" },
+    discovered: { label: "discovered", color: "var(--text3)",        bg: "var(--surface2)",   border: "var(--border)" },
 }
 
+const SHOW_STATUS = new Set(["failed", "disabled"])
+
 function ConnectionStatusBadge({ status }) {
-    if (!status) return null
+    if (!status || !SHOW_STATUS.has(status)) return null
     const c = CONNECTION_STATUS[status]
     if (!c) return null
     return (
@@ -131,11 +134,36 @@ function VendorCard({ group, toolCount, active, onClick }) {
 // View
 // ---------------------------------------------------------------------------
 
+function FilterChip({ label, checked, onChange }) {
+    return (
+        <label style={{
+            display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+            padding: "4px 8px", borderRadius: "var(--radius)",
+            border: `1px solid ${checked ? "var(--border3)" : "var(--border)"}`,
+            background: checked ? "var(--surface3)" : "transparent",
+            fontSize: 10, color: checked ? "var(--cream)" : "var(--text3)",
+            fontFamily: "Menlo, Consolas, monospace", userSelect: "none",
+            transition: "all 0.1s", whiteSpace: "nowrap",
+        }}>
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={onChange}
+                style={{ accentColor: "var(--lime)", width: 10, height: 10, cursor: "pointer", flexShrink: 0 }}
+            />
+            {label}
+        </label>
+    )
+}
+
 export function Servers({ initialSel }) {
     const { data: list, loading, error } = useFetch(api.servers)
     const [sel, setSel] = useState(null)
     const [search, setSearch] = useState("")
     const [activeVendor, setActiveVendor] = useState(null)
+    const [filters, setFilters] = useState({ scope: new Set(), status: new Set(), transport: new Set() })
+    const [filterOpen, setFilterOpen] = useState(false)
+    const filterRef = useRef(null)
     const { data: detail, loading: dLoading } = useFetch(
         () => sel ? api.server(sel) : Promise.resolve(null), [sel]
     )
@@ -145,6 +173,15 @@ export function Servers({ initialSel }) {
         if (initialSel) setSel(initialSel)
         else if (!sel) setSel(list.servers[0].id)
     }, [list, initialSel])
+
+    useEffect(() => {
+        if (!filterOpen) return
+        function handleClick(e) {
+            if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false)
+        }
+        document.addEventListener("mousedown", handleClick)
+        return () => document.removeEventListener("mousedown", handleClick)
+    }, [filterOpen])
 
     if (loading) return <Spinner />
     if (error) return <Err msg={error} />
@@ -157,15 +194,35 @@ export function Servers({ initialSel }) {
         toolCount: g.servers.reduce((n, s) => n + (s.discovered_tool_count || 0), 0),
     }))
 
-    // Sidebar: filter by active vendor and search
+    function toggleFilter(dim, val) {
+        setFilters(prev => {
+            const next = new Set(prev[dim])
+            next.has(val) ? next.delete(val) : next.add(val)
+            return { ...prev, [dim]: next }
+        })
+    }
+
+    // Sidebar: filter by active vendor, search, and checkboxes
     const q = search.toLowerCase()
     const filteredGroups = allGroups
         .filter(g => !activeVendor || g.key === activeVendor)
         .map(g => ({
             ...g,
-            servers: q ? g.servers.filter(s => s.name.toLowerCase().includes(q)) : g.servers,
+            servers: g.servers.filter(s => {
+                if (q && !s.name.toLowerCase().includes(q)) return false
+                const { scope } = classifyClient(s.client)
+                if (filters.scope.size > 0 && !filters.scope.has(scope)) return false
+                if (filters.status.has("failed")) {
+                    const bad = s.connection_status === "failed" || s.connection_status === "disabled"
+                    if (!bad) return false
+                }
+                if (filters.transport.size > 0 && !filters.transport.has(s.transport)) return false
+                return true
+            }),
         }))
         .filter(g => g.servers.length > 0)
+
+    const activeFilterCount = filters.scope.size + filters.status.size + filters.transport.size
 
     const toggleVendor = (key) => {
         setActiveVendor(v => v === key ? null : key)
@@ -191,7 +248,7 @@ export function Servers({ initialSel }) {
                 ))}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "210px 1fr", gap: 14, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20, alignItems: "start" }}>
 
                 {/* Sidebar */}
                 <div style={{
@@ -199,20 +256,94 @@ export function Servers({ initialSel }) {
                     position: "sticky", top: 56,
                     maxHeight: "calc(100vh - 72px)",
                 }}>
-                    {/* Search — pinned, never scrolls */}
-                    <input
-                        type="text"
-                        placeholder={activeVendor ? `Search in ${activeVendor}…` : "Search all servers…"}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        style={{
-                            width: "100%", padding: "7px 10px", marginBottom: 10,
-                            background: "var(--surface2)", border: "1px solid var(--border)",
-                            borderRadius: "var(--radius)", color: "var(--cream)",
-                            fontSize: 12, fontFamily: "Menlo, Consolas, monospace",
-                            outline: "none", boxSizing: "border-box", flexShrink: 0,
-                        }}
-                    />
+                    {/* Search + Filter row — pinned, never scrolls */}
+                    <div style={{ display: "flex", gap: 6, marginBottom: 10, flexShrink: 0 }}>
+                        <input
+                            type="text"
+                            placeholder={activeVendor ? `Search in ${activeVendor}…` : "Search…"}
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            style={{
+                                flex: 1, minWidth: 0, padding: "7px 10px",
+                                background: "var(--surface2)", border: "1px solid var(--border)",
+                                borderRadius: "var(--radius)", color: "var(--cream)",
+                                fontSize: 12, fontFamily: "Menlo, Consolas, monospace",
+                                outline: "none", boxSizing: "border-box",
+                            }}
+                        />
+                        <div ref={filterRef} style={{ position: "relative", flexShrink: 0 }}>
+                            <button
+                                onClick={() => setFilterOpen(o => !o)}
+                                style={{
+                                    height: "100%", padding: "0 10px",
+                                    background: filterOpen || activeFilterCount > 0 ? "var(--surface3)" : "var(--surface2)",
+                                    border: `1px solid ${filterOpen || activeFilterCount > 0 ? "var(--border3)" : "var(--border)"}`,
+                                    borderRadius: "var(--radius)", color: activeFilterCount > 0 ? "var(--cream)" : "var(--text3)",
+                                    fontSize: 11, fontFamily: "Menlo, Consolas, monospace",
+                                    cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+                                    transition: "all 0.12s", whiteSpace: "nowrap",
+                                }}
+                            >
+                                <span>Filter</span>
+                                {activeFilterCount > 0 && (
+                                    <span style={{
+                                        background: "var(--lime)", color: "#0a0d14",
+                                        borderRadius: 9, fontSize: 9, fontWeight: 700,
+                                        padding: "1px 5px", lineHeight: 1.4,
+                                    }}>{activeFilterCount}</span>
+                                )}
+                                <span style={{ fontSize: 9, opacity: 0.6 }}>{filterOpen ? "▲" : "▼"}</span>
+                            </button>
+
+                            {filterOpen && (
+                                <div style={{
+                                    position: "absolute", top: "calc(100% + 6px)", right: 0,
+                                    background: "var(--surface2)", border: "1px solid var(--border3)",
+                                    borderRadius: "var(--radius-lg)", padding: "14px 16px",
+                                    zIndex: 200, minWidth: 200,
+                                    boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                                    display: "flex", flexDirection: "column", gap: 14,
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginBottom: 8 }}>Scope</div>
+                                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                            <FilterChip label="global"  checked={filters.scope.has("global")}  onChange={() => toggleFilter("scope", "global")} />
+                                            <FilterChip label="project" checked={filters.scope.has("project")} onChange={() => toggleFilter("scope", "project")} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginBottom: 8 }}>Status</div>
+                                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                            <FilterChip label="failed" checked={filters.status.has("failed")} onChange={() => toggleFilter("status", "failed")} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginBottom: 8 }}>Transport</div>
+                                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                            <FilterChip label="stdio" checked={filters.transport.has("stdio")} onChange={() => toggleFilter("transport", "stdio")} />
+                                            <FilterChip label="http"  checked={filters.transport.has("http")}  onChange={() => toggleFilter("transport", "http")} />
+                                            <FilterChip label="sse"   checked={filters.transport.has("sse")}   onChange={() => toggleFilter("transport", "sse")} />
+                                        </div>
+                                    </div>
+                                    {activeFilterCount > 0 && (
+                                        <button
+                                            onClick={() => setFilters({ scope: new Set(), status: new Set(), transport: new Set() })}
+                                            style={{
+                                                padding: "5px 0", background: "none", border: "none",
+                                                borderTop: "1px solid var(--border)", color: "var(--text3)",
+                                                fontSize: 10, fontFamily: "Menlo, Consolas, monospace",
+                                                cursor: "pointer", textAlign: "left",
+                                            }}
+                                            onMouseEnter={e => e.target.style.color = "var(--red)"}
+                                            onMouseLeave={e => e.target.style.color = "var(--text3)"}
+                                        >
+                                            clear all filters
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Server list — scrolls independently */}
                     <div style={{ overflowY: "auto", flex: 1 }}>
@@ -265,7 +396,7 @@ export function Servers({ initialSel }) {
                                     <ConnectionStatusBadge status={detail.connection_status} />
                                 </div>
                                 {detail.description && <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>{detail.description}</p>}
-                                {detail.raw_connection_status && (
+                                {detail.raw_connection_status && SHOW_STATUS.has(detail.connection_status) && (
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                                         <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>status msg</span>
                                         <span style={{ fontSize: 11, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace" }}>{detail.raw_connection_status}</span>
@@ -281,9 +412,21 @@ export function Servers({ initialSel }) {
                                         <div key={k} style={{ padding: "11px 14px", background: "var(--surface2)", borderRadius: "var(--radius)", border: "1px solid var(--border)" }}>
                                             <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text3)", marginBottom: 5, fontFamily: "Menlo, Consolas, monospace" }}>{k}</div>
                                             {k === "Source"
-                                                ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                                    <span style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 11, color: "var(--cream)" }}>{v || "—"}</span>
-                                                    <ScopeTag scope={classifyClient(detail.client).scope} />
+                                                ? <div>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                                                        <span style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 11, color: "var(--cream)" }}>{v || "—"}</span>
+                                                        <ScopeTag scope={classifyClient(detail.client).scope} />
+                                                    </div>
+                                                    {detail.source_path && (
+                                                        <div style={{ fontSize: 9, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", wordBreak: "break-all", lineHeight: 1.5 }}>
+                                                            {detail.source_path}
+                                                        </div>
+                                                    )}
+                                                    {detail.project_path && (
+                                                        <div style={{ fontSize: 9, color: "var(--lime-dim)", fontFamily: "Menlo, Consolas, monospace", wordBreak: "break-all", lineHeight: 1.5, marginTop: 2 }}>
+                                                            {detail.project_path}
+                                                        </div>
+                                                    )}
                                                   </div>
                                                 : <div style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 11, color: "var(--cream)", wordBreak: "break-all" }}>{v || "—"}</div>
                                             }
