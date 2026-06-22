@@ -44,7 +44,7 @@ def _run_claude_mcp_list(cwd: Optional[Path] = None) -> dict[str, str]:
     try:
         proc = subprocess.run(
             ["claude", "mcp", "list"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=15,
             cwd=str(cwd) if cwd else None,
         )
         output = proc.stdout

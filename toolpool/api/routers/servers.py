@@ -1,24 +1,35 @@
-"""GET /api/servers, GET /api/servers/{id}"""
+"""GET /api/servers, GET /api/servers/{id}, POST /api/servers/{id}/rescan"""
+import asyncio
+import re
+
 from fastapi import APIRouter, HTTPException
-from toolpool.core.parsers.parser import get_parser
+from toolpool.core.parsers.parser import get_parser, get_last_scanned
 
 router = APIRouter()
 
 _SENSITIVE_HEADERS = frozenset({"authorization", "x-api-key", "x-auth-token", "x-secret"})
+_SENSITIVE_ENV_SEGMENTS = frozenset({"key", "secret", "token", "password", "apikey"})
+
+
+def _is_sensitive_env(name: str) -> bool:
+    parts = re.split(r"[_\-]", name.lower())
+    return any(p in _SENSITIVE_ENV_SEGMENTS for p in parts)
 
 
 def _redact_server(d: dict) -> dict:
-    """Replace values of sensitive HTTP headers with '***' before sending to the UI."""
-    headers = d.get("headers")
-    if not headers:
-        return d
-    return {
-        **d,
-        "headers": {
+    """Replace values of sensitive HTTP headers and env vars with '***'."""
+    result = dict(d)
+    if result.get("headers"):
+        result["headers"] = {
             k: "***" if k.lower() in _SENSITIVE_HEADERS else v
-            for k, v in headers.items()
-        },
-    }
+            for k, v in result["headers"].items()
+        }
+    if result.get("env"):
+        result["env"] = {
+            k: "***" if _is_sensitive_env(k) else v
+            for k, v in result["env"].items()
+        }
+    return result
 
 
 @router.get("/servers")
@@ -43,6 +54,7 @@ async def list_servers():
     return {
         "servers": result,
         "total": len(result),
+        "scanned_at": get_last_scanned(),
         "conflict_errors": len([
             e for e in manifest.conflict_errors
             if e.entity_type == "server"
@@ -114,3 +126,29 @@ async def get_server(server_id: str):
         "_conflicted": server_id in conflicted,
         "_warned": server_id in warned,
     })
+
+
+@router.post("/servers/{server_id}/rescan")
+async def rescan_server(server_id: str):
+    """Re-probe a single server and update its discovered tools in the manifest."""
+    from toolpool.core.discovery.tool_discovery import list_tools_for
+    from toolpool.core.models.server import DiscoveredToolLite
+
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
+
+    result = await asyncio.to_thread(list_tools_for, server)
+    new_tools = [
+        DiscoveredToolLite(name=t.name, description=t.description, input_schema=t.input_schema)
+        for t in result.tools
+    ]
+    manifest.servers[server_id] = server.model_copy(update={"discovered_tools": new_tools, "probe_status": result.status.value, "probe_error": result.error or None})
+
+    return {
+        "status": result.status.value,
+        "tool_count": len(new_tools),
+        "error": result.error,
+        "duration_ms": result.duration_ms,
+    }

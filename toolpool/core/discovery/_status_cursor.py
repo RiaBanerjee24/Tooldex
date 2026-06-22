@@ -23,7 +23,7 @@ def fetch_cursor_status() -> dict[str, tuple[str, str]]:
     try:
         proc = subprocess.run(
             ["cursor-agent", "mcp", "list"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=15,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return {}
@@ -51,7 +51,7 @@ def _probe_one(name: str) -> tuple[str, tuple[str, str]]:
     try:
         tp = subprocess.run(
             ["cursor-agent", "mcp", "list-tools", name],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=15,
         )
         out = tp.stdout.strip()
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):

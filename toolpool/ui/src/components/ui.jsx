@@ -26,25 +26,25 @@ export function classifyServerProvenance(server) {
     const source = server.source || "yaml"
     const status = server.discovery_status || "not_attempted"
 
-    // Probe-level issues override tag color
-    const probeFailed = status === "failed"
+    // probe_status (autodiscovery) takes precedence over legacy discovery_status
+    const probeFailed =
+        (server.probe_status != null && server.probe_status !== "found") ||
+        status === "failed"
     const toolsEmpty =
-        status === "ok" &&
+        (server.probe_status === "found" || status === "ok") &&
         (server.discovered_tools?.length || 0) === 0
 
     let state, color
     if (source === "discovered") {
         state = "discovered"
-        color = "yellow"
+        color = probeFailed ? "red" : "yellow"
     } else if (source === "both") {
         state = "declared"
-        color = probeFailed ? "yellow" : "lime"
+        color = probeFailed ? "red" : "lime"
     } else {
-        // source === "yaml" — declared but not in any client config
+        // source === "yaml" or unset (autodiscovery mode) — use probe result
         state = status === "not_found_in_clients" ? "not-discovered" : "declared"
-        color = status === "not_found_in_clients" ? "red"
-            : probeFailed ? "yellow"
-                : "lime"
+        color = (status === "not_found_in_clients" || probeFailed) ? "red" : "lime"
     }
 
     // Icon + tooltip — only rendered when there's something to surface

@@ -22,7 +22,7 @@ def fetch_codex_status() -> dict[str, str]:
     try:
         proc = subprocess.run(
             ["codex", "mcp", "list"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=15,
         )
         output = proc.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):

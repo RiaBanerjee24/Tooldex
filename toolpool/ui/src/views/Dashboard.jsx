@@ -1,19 +1,61 @@
 import { Card, CardHead, Spinner, StatCard } from "../components/ui.jsx"
 
-export function Dashboard({ health, serversData, onNavigateServers, onNavigateToServer }) {
+function RescanButton({ onRescan, rescanState, rescanSeconds }) {
+    const label = rescanState === "scanning" ? `scanning… ${rescanSeconds}s` : rescanState === "done" ? "done ✓" : "rescan"
+    const color = rescanState === "scanning" ? "var(--yellow-muted)" : rescanState === "done" ? "var(--lime)" : "var(--text3)"
+    const borderColor = rescanState === "scanning" ? "var(--yellow-muted)" : "var(--border2)"
+
+    return (
+        <button onClick={onRescan} style={{
+            padding: "6px 14px", background: "var(--surface2)",
+            border: `1px solid ${borderColor}`,
+            borderRadius: "var(--radius)", cursor: rescanState === "scanning" ? "default" : "pointer",
+            fontSize: 11, color, fontFamily: "Menlo, Consolas, monospace",
+            letterSpacing: "0.04em", transition: "color 0.2s, border-color 0.2s",
+        }}>
+            {label}
+        </button>
+    )
+}
+
+export function Dashboard({ health, serversData, onNavigateServers, onNavigateToServer, onRescan, rescanState, rescanSeconds }) {
     if (!health || !serversData) return <Spinner />
     const servers = serversData.servers || []
     const discoveredTools = servers.reduce((n, s) => n + (s.discovered_tool_count || 0), 0)
 
+    const connected = servers.filter(s => {
+        if (s.probe_status != null) return s.probe_status === "found"
+        return s.connection_status === "connected" || s.connection_status === "enabled"
+    }).length
+    const failed = servers.filter(s => {
+        if (s.probe_status != null) return s.probe_status !== "found"
+        return s.connection_status === "failed" || s.connection_status === "disabled"
+    }).length
+
+    const statusPills = (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 10, color: "var(--lime)", fontFamily: "var(--font-mono)" }}>
+                {connected} connected
+            </span>
+            {failed > 0 && <>
+                <span style={{ color: "var(--border2)", fontSize: 10 }}>·</span>
+                <span style={{ fontSize: 10, color: "var(--red)", fontFamily: "var(--font-mono)" }}>
+                    {failed} failed
+                </span>
+            </>}
+        </div>
+    )
+
     return (
         <div className="fade" style={{ padding: "32px 0" }}>
-            <div style={{ marginBottom: 28 }}>
-                <h1 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 36, color: "var(--cream)", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+                <h1 style={{
+                    fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400,
+                    fontSize: 36, color: "var(--cream)", letterSpacing: "-0.01em", lineHeight: 1.1, margin: 0,
+                }}>
                     Overview
                 </h1>
-                {/* <div style={{ color: "var(--text3)", fontSize: 12, fontFamily: "Menlo, Consolas, monospace", marginTop: 6 }}>
-                    {health.config?.name} · {health.config?.owner}
-                </div> */}
+                <RescanButton onRescan={onRescan} rescanState={rescanState} rescanSeconds={rescanSeconds} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginBottom: 28 }}>
@@ -34,8 +76,8 @@ export function Dashboard({ health, serversData, onNavigateServers, onNavigateTo
             )}
 
             <Card>
-                <CardHead>MCP Servers</CardHead>
-                {servers.slice(0, 5).map((srv, i) => (
+                <CardHead right={servers.length > 0 ? statusPills : null}>MCP Servers</CardHead>
+                {servers.slice(0, 5).map((srv) => (
                     <div key={srv.id} onClick={() => onNavigateToServer(srv.id)} style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         padding: "12px 18px",

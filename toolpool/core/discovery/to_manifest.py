@@ -57,9 +57,12 @@ def build_manifest(
     # Attach discovered tools to each server (as pydantic DiscoveredToolLite).
     servers: dict[str, MCPServer] = {}
     for server_id, server in config_result.servers.items():
-        lite_tools = _lite_tools_for(server_id, tools_by_server.get(server_id))
+        result = tools_by_server.get(server_id)
+        lite_tools = _lite_tools_for(server_id, result)
+        probe_status = result.status.value if result is not None else None
+        probe_error = result.error if (result is not None and result.error) else None
         # Copy the server so we don't mutate the discovery result.
-        enriched = server.model_copy(update={"discovered_tools": lite_tools})
+        enriched = server.model_copy(update={"discovered_tools": lite_tools, "probe_status": probe_status, "probe_error": probe_error})
         servers[server_id] = enriched
 
     all_tools = sorted({

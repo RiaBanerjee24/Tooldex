@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import "./index.css"
 import { api } from "./api.js"
 import { useFetch } from "./hooks/useFetch.js"
@@ -10,12 +10,39 @@ import { Servers } from "./views/Servers.jsx"
 export default function App() {
     const [tab, setTab] = useState("Dashboard")
     const [selectedServerId, setSelectedServerId] = useState(null)
-    const { data: health } = useFetch(api.health)
-    const { data: servers } = useFetch(api.servers)
+    const [scanKey, setScanKey] = useState(0)
+
+    // Shared rescan state — lifted here so both pages stay in sync
+    const [rescanState, setRescanState] = useState("idle") // idle | scanning | done
+    const [rescanSeconds, setRescanSeconds] = useState(0)
+
+    useEffect(() => {
+        if (rescanState !== "scanning") { setRescanSeconds(0); return }
+        const id = setInterval(() => setRescanSeconds(s => s + 1), 1000)
+        return () => clearInterval(id)
+    }, [rescanState])
+
+    const { data: health } = useFetch(api.health, [scanKey])
+    const { data: servers } = useFetch(api.servers, [scanKey])
 
     const navigateToServer = (id) => {
         setSelectedServerId(id)
         setTab("Servers")
+    }
+
+    const handleRescan = async () => {
+        if (rescanState === "scanning") return
+        setRescanState("scanning")
+        try {
+            const res = await api.rescan()
+            if (res?.status === "already_scanning") { setRescanState("idle"); return res }
+            setScanKey(k => k + 1)
+            setRescanState("done")
+            setTimeout(() => setRescanState("idle"), 2000)
+            return res
+        } catch {
+            setRescanState("idle")
+        }
     }
 
     return (
@@ -29,9 +56,20 @@ export default function App() {
                             serversData={servers}
                             onNavigateServers={() => setTab("Servers")}
                             onNavigateToServer={navigateToServer}
+                            onRescan={handleRescan}
+                            rescanState={rescanState}
+                            rescanSeconds={rescanSeconds}
                         />
                     )}
-                    {tab === "Servers" && <Servers initialSel={selectedServerId} />}
+                    {tab === "Servers" && (
+                        <Servers
+                            initialSel={selectedServerId}
+                            scanKey={scanKey}
+                            onRescan={handleRescan}
+                            rescanState={rescanState}
+                            rescanSeconds={rescanSeconds}
+                        />
+                    )}
                 </Wrap>
             </div>
             <footer style={{

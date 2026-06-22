@@ -13,5 +13,5 @@ export function useFetch(fn, deps = []) {
     }, deps)
 
     useEffect(() => { run() }, [run])
-    return { data, loading, error }
+    return { data, loading, error, refetch: run }
 }

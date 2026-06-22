@@ -6,6 +6,204 @@ import {
 } from "../components/ui.jsx"
 
 // ---------------------------------------------------------------------------
+// Copy config button
+// ---------------------------------------------------------------------------
+
+function buildCopyConfig(detail) {
+    const key = detail.name || detail.id
+    const cfg = {}
+    if (detail.url) {
+        cfg.type = detail.transport || "http"
+        cfg.url = detail.url
+        if (detail.headers && Object.keys(detail.headers).length > 0)
+            cfg.headers = detail.headers
+    } else {
+        if (detail.command) cfg.command = detail.command
+        if (detail.args?.length) cfg.args = detail.args
+        if (detail.env && Object.keys(detail.env).length > 0) cfg.env = detail.env
+    }
+    return JSON.stringify({ mcpServers: { [key]: cfg } }, null, 2)
+}
+
+function CopyConfigButton({ detail }) {
+    const [state, setState] = useState("idle") // idle | copied
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(buildCopyConfig(detail))
+            setState("copied")
+            setTimeout(() => setState("idle"), 2000)
+        } catch {
+            // fallback for older browsers
+            const el = document.createElement("textarea")
+            el.value = buildCopyConfig(detail)
+            document.body.appendChild(el)
+            el.select()
+            document.execCommand("copy")
+            document.body.removeChild(el)
+            setState("copied")
+            setTimeout(() => setState("idle"), 2000)
+        }
+    }
+
+    return (
+        <button onClick={handleCopy} style={{
+            padding: "5px 12px", background: "var(--surface2)",
+            border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+            cursor: "pointer", fontSize: 10,
+            color: state === "copied" ? "var(--lime)" : "var(--text3)",
+            fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+            transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
+        }}>
+            {state === "copied" ? "copied ✓" : "copy config"}
+        </button>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Per-server rescan button
+// ---------------------------------------------------------------------------
+
+function RescanServerButton({ serverId, onDone }) {
+    const [state, setState] = useState("idle") // idle | scanning | done | error
+
+    const handleClick = async () => {
+        if (state === "scanning") return
+        setState("scanning")
+        try {
+            await api.rescanServer(serverId)
+            setState("done")
+            onDone?.()
+            setTimeout(() => setState("idle"), 2000)
+        } catch {
+            setState("error")
+            setTimeout(() => setState("idle"), 2500)
+        }
+    }
+
+    const label = state === "scanning" ? "scanning…"
+        : state === "done" ? "done ✓"
+        : state === "error" ? "failed ✗"
+        : "rescan server"
+    const color = state === "done" ? "var(--lime)"
+        : state === "error" ? "var(--red)"
+        : "var(--text3)"
+
+    return (
+        <button onClick={handleClick} style={{
+            padding: "5px 12px", background: "var(--surface2)",
+            border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+            cursor: state === "scanning" ? "default" : "pointer", fontSize: 10,
+            color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+            transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
+            opacity: state === "scanning" ? 0.7 : 1,
+        }}>
+            {label}
+        </button>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Rescan all button (header level)
+// ---------------------------------------------------------------------------
+
+function RescanAllButton({ onRescan, rescanState, rescanSeconds }) {
+    const label = rescanState === "scanning" ? `scanning… ${rescanSeconds}s` : rescanState === "done" ? "done ✓" : "rescan all"
+    const color = rescanState === "scanning" ? "var(--yellow-muted)" : rescanState === "done" ? "var(--lime)" : "var(--text3)"
+    const borderColor = rescanState === "scanning" ? "var(--yellow-muted)" : "var(--border2)"
+
+    return (
+        <button onClick={onRescan} style={{
+            padding: "6px 14px", background: "var(--surface2)",
+            border: `1px solid ${borderColor}`, borderRadius: "var(--radius)",
+            cursor: rescanState === "scanning" ? "default" : "pointer", fontSize: 11,
+            color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+            transition: "color 0.2s, border-color 0.2s",
+        }}>
+            {label}
+        </button>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Env vars table — shows redacted placeholder for sensitive values
+// ---------------------------------------------------------------------------
+
+function EnvTable({ env }) {
+    if (!env || Object.keys(env).length === 0) return null
+    const entries = Object.entries(env)
+    return (
+        <div style={{ marginTop: 10 }}>
+            <div style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+                color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginBottom: 6,
+            }}>Environment</div>
+            <div style={{
+                background: "var(--surface2)", borderRadius: "var(--radius)",
+                border: "1px solid var(--border)", overflow: "hidden",
+            }}>
+                {entries.map(([k, v], i) => (
+                    <div key={k} style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "7px 12px",
+                        borderBottom: i < entries.length - 1 ? "1px solid var(--border)" : "none",
+                    }}>
+                        <span style={{
+                            fontFamily: "Menlo, Consolas, monospace", fontSize: 11,
+                            color: "var(--cream)", minWidth: 180, flexShrink: 0,
+                        }}>{k}</span>
+                        {v === "***"
+                            ? <span style={{
+                                fontFamily: "Menlo, Consolas, monospace", fontSize: 10,
+                                color: "var(--text3)", padding: "1px 6px",
+                                background: "var(--surface3)", borderRadius: 3,
+                                border: "1px solid var(--border2)", letterSpacing: "0.04em",
+                            }}>redacted</span>
+                            : <span style={{
+                                fontFamily: "Menlo, Consolas, monospace", fontSize: 11,
+                                color: "var(--text2)", wordBreak: "break-all",
+                            }}>{v}</span>
+                        }
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Last-scanned timestamp
+// ---------------------------------------------------------------------------
+
+function formatRelativeTime(isoStr) {
+    if (!isoStr) return null
+    const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000)
+    if (diff < 10) return "just now"
+    if (diff < 60) return `${diff}s ago`
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
+}
+
+function ScannedAt({ timestamp }) {
+    const [rel, setRel] = useState(() => formatRelativeTime(timestamp))
+    useEffect(() => {
+        setRel(formatRelativeTime(timestamp))
+        const id = setInterval(() => setRel(formatRelativeTime(timestamp)), 30_000)
+        return () => clearInterval(id)
+    }, [timestamp])
+    if (!rel) return null
+    return (
+        <span title={timestamp} style={{
+            fontSize: 10, color: "var(--text3)",
+            fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+        }}>
+            scanned {rel}
+        </span>
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Client → group / label mapping
 // ---------------------------------------------------------------------------
 
@@ -42,6 +240,12 @@ const CONNECTION_STATUS = {
 }
 
 const SHOW_STATUS = new Set(["failed", "disabled"])
+
+// probe_status is the ground truth; fall back to connection_status for YAML-only manifests
+function effectiveStatus(s) {
+    if (s.probe_status != null) return s.probe_status === "found" ? null : "failed"
+    return s.connection_status || null
+}
 
 function ConnectionStatusBadge({ status }) {
     if (!status || !SHOW_STATUS.has(status)) return null
@@ -156,23 +360,29 @@ function FilterChip({ label, checked, onChange }) {
     )
 }
 
-export function Servers({ initialSel }) {
-    const { data: list, loading, error } = useFetch(api.servers)
+export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle", rescanSeconds = 0 }) {
+    const { data: list, loading, error, refetch: refetchList } = useFetch(api.servers, [scanKey])
     const [sel, setSel] = useState(null)
     const [search, setSearch] = useState("")
     const [activeVendor, setActiveVendor] = useState(null)
     const [filters, setFilters] = useState({ scope: new Set(), status: new Set(), transport: new Set() })
     const [filterOpen, setFilterOpen] = useState(false)
     const filterRef = useRef(null)
-    const { data: detail, loading: dLoading } = useFetch(
+    const { data: detail, loading: dLoading, refetch: refetchDetail } = useFetch(
         () => sel ? api.server(sel) : Promise.resolve(null), [sel]
     )
 
     useEffect(() => {
         if (!list?.servers?.length) return
-        if (initialSel) setSel(initialSel)
-        else if (!sel) setSel(list.servers[0].id)
+        if (initialSel) { setSel(initialSel); return }
+        const ids = new Set(list.servers.map(s => s.id))
+        if (!sel || !ids.has(sel)) setSel(list.servers[0].id)
     }, [list, initialSel])
+
+    // Refresh list + detail when a global rescan completes
+    useEffect(() => {
+        if (rescanState === "done") { refetchList(); refetchDetail() }
+    }, [rescanState])
 
     useEffect(() => {
         if (!filterOpen) return
@@ -213,8 +423,7 @@ export function Servers({ initialSel }) {
                 const { scope } = classifyClient(s.client)
                 if (filters.scope.size > 0 && !filters.scope.has(scope)) return false
                 if (filters.status.has("failed")) {
-                    const bad = s.connection_status === "failed" || s.connection_status === "disabled"
-                    if (!bad) return false
+                    if (effectiveStatus(s) !== "failed") return false
                 }
                 if (filters.transport.size > 0 && !filters.transport.has(s.transport)) return false
                 return true
@@ -231,9 +440,15 @@ export function Servers({ initialSel }) {
 
     return (
         <div className="fade" style={{ padding: "32px 0" }}>
-            <h1 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 36, color: "var(--cream)", marginBottom: 24 }}>
-                MCP Servers
-            </h1>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+                <h1 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 36, color: "var(--cream)", margin: 0 }}>
+                    MCP Servers
+                </h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <ScannedAt timestamp={list?.scanned_at} />
+                    <RescanAllButton onRescan={onRescan} rescanState={rescanState} rescanSeconds={rescanSeconds} />
+                </div>
+            </div>
 
             {/* Vendor mini-dashboard */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
@@ -372,7 +587,7 @@ export function Servers({ initialSel }) {
                                                 <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", marginTop: 2 }}>
                                                     <span>{s.agent_count}a · {s.transport}</span>
                                                     <ScopeTag scope={scope} />
-                                                    <ConnectionStatusBadge status={s.connection_status} />
+                                                    <ConnectionStatusBadge status={effectiveStatus(s)} />
                                                 </div>
                                             </SidebarBtn>
                                         )
@@ -393,16 +608,22 @@ export function Servers({ initialSel }) {
                                     <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", margin: 0 }}>
                                         {detail.name}
                                     </h2>
-                                    <ConnectionStatusBadge status={detail.connection_status} />
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                        <ConnectionStatusBadge status={effectiveStatus(detail)} />
+                                        <RescanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
+                                        <CopyConfigButton detail={detail} />
+                                    </div>
                                 </div>
                                 {detail.description && <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>{detail.description}</p>}
-                                {detail.raw_connection_status && SHOW_STATUS.has(detail.connection_status) && (
+                                {effectiveStatus(detail) === "failed" && (
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                                        <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>status msg</span>
-                                        <span style={{ fontSize: 11, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace" }}>{detail.raw_connection_status}</span>
+                                        <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>status</span>
+                                        <span style={{ fontSize: 11, color: "var(--red)", fontFamily: "Menlo, Consolas, monospace" }}>
+                                            {detail.probe_error || detail.raw_connection_status || detail.probe_status}
+                                        </span>
                                     </div>
                                 )}
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: detail.env && Object.keys(detail.env).length > 0 ? 0 : undefined }}>
                                     {[
                                         ["Transport", detail.transport],
                                         ["Source", classifyClient(detail.client).label],
@@ -433,6 +654,7 @@ export function Servers({ initialSel }) {
                                         </div>
                                     ))}
                                 </div>
+                                <EnvTable env={detail.env} />
                             </div>
                         </Card>
 

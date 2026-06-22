@@ -105,11 +105,14 @@ async def _probe_with_timeout(probe_fn, server: MCPServer, timeout: float) -> To
             error=f"Probe exceeded {timeout:.1f}s timeout.",
             duration_ms=int((time.monotonic() - start) * 1000),
         )
-    except FileNotFoundError as exc:
+    except FileNotFoundError:
+        cmd = server.command or ""
+        hint = _RUNTIME_HINTS.get(cmd)
+        error = f"'{cmd}' is not installed" + (f" — {hint}" if hint else "")
         return ToolDiscoveryResult(
             server_id=server.id,
             status=ToolDiscoveryStatus.CONNECTION_FAILED,
-            error=f"Command not found: {exc}",
+            error=error,
             duration_ms=int((time.monotonic() - start) * 1000),
         )
     except Exception as exc:  # noqa: BLE001
@@ -365,6 +368,20 @@ def _to_dict(value) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 DEFAULT_CONCURRENCY = 8
+
+_RUNTIME_HINTS: dict[str, str] = {
+    "uvx":     "install uv: https://astral.sh/uv",
+    "uv":      "install uv: https://astral.sh/uv",
+    "npx":     "install Node.js: https://nodejs.org",
+    "node":    "install Node.js: https://nodejs.org",
+    "npm":     "install Node.js: https://nodejs.org",
+    "docker":  "install Docker: https://docs.docker.com/get-docker/",
+    "python":  "install Python: https://python.org",
+    "python3": "install Python: https://python.org",
+    "deno":    "install Deno: https://deno.com",
+    "bun":     "install Bun: https://bun.sh",
+    "pipx":    "install pipx: https://pipx.pypa.io",
+}
 
 
 async def probe_all(

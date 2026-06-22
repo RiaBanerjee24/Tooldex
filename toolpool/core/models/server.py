@@ -45,3 +45,10 @@ class MCPServer(BaseModel):
     connection_status: Optional[str] = None
     # Raw status string from the CLI — e.g. "not loaded (needs approval)"
     raw_connection_status: Optional[str] = None
+
+    # Result of the last MCP probe attempt.
+    # "found" | "empty" | "timeout" | "connection_failed" | "protocol_error" | ...
+    # None means the server was never probed (e.g. YAML-only manifest).
+    probe_status: Optional[str] = None
+    # Human-readable error from the last failed probe, if any.
+    probe_error: Optional[str] = None

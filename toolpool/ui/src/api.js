@@ -12,6 +12,12 @@ async function get(path) {
     return res.json()
 }
 
+async function post(path) {
+    const res = await fetch(`${BASE}${path}`, { method: "POST" })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${path}`)
+    return res.json()
+}
+
 export const api = {
     health: () => get("/api/health"),
     agents: () => get("/api/agents"),
@@ -21,4 +27,6 @@ export const api = {
     matrix: () => get("/api/policy/matrix"),
     engines: () => get("/api/policy/engines"),
     engineRaw: (id) => get(`/api/policy/engines/${id}/raw`),
+    rescan: () => post("/api/rescan"),
+    rescanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/rescan`),
 }

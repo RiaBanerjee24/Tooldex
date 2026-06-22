@@ -332,21 +332,9 @@ def run(
     init_parser_from_manifest(manifest)
 
     total_tools = sum(len(s.discovered_tools) for s in manifest.servers.values())
-
-    def _row(text: str, width: int = 50) -> str:
-        if len(text) > width:
-            text = text[: width - 1] + "…"
-        return f"║{text.ljust(width)}║"
-
     url = f"http://{host}:{actual_port}"
-    typer.echo("\n  " + "╔" + "═" * 50 + "╗")
-    typer.echo("  " + _row(f"         toolpool  v{__version__}"))
-    typer.echo("  " + "╠" + "═" * 50 + "╣")
-    typer.echo("  " + _row(f"  Servers  {len(manifest.servers)}"))
-    typer.echo("  " + _row(f"  Tools    {total_tools}"))
-    typer.echo("  " + "╠" + "═" * 50 + "╣")
-    typer.echo("  " + _row(f"  →  {url}"))
-    typer.echo("  " + "╚" + "═" * 50 + "╝\n")
+    from toolpool._cli_output import print_banner
+    print_banner(len(manifest.servers), total_tools, url)
 
     uvicorn.run(create_app(), host=host, port=actual_port, log_level="warning")
 

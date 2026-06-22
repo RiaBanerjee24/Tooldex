@@ -45,6 +45,7 @@ def _run(*args: str) -> Optional[str]:
         result = subprocess.run(
             ["docker", "mcp", *args],
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=_TIMEOUT,
         )

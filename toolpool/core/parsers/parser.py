@@ -299,6 +299,11 @@ class ToolpoolParser:
 # ---------------------------------------------------------------------------
 
 _parser: Optional[ToolpoolParser] = None
+_last_scanned: Optional[str] = None   # ISO-8601 UTC timestamp, set on every manifest install
+
+
+def get_last_scanned() -> Optional[str]:
+    return _last_scanned
 
 
 def get_parser() -> ToolpoolParser:
@@ -311,9 +316,11 @@ def get_parser() -> ToolpoolParser:
 
 
 def init_parser(config_path: str) -> ToolpoolParser:
-    global _parser
+    global _parser, _last_scanned
+    from datetime import datetime, timezone
     _parser = ToolpoolParser(config_path)
     _parser.load()
+    _last_scanned = datetime.now(timezone.utc).isoformat()
     return _parser
 
 
@@ -330,9 +337,11 @@ def init_parser_from_manifest(manifest: ToolpoolManifest) -> ToolpoolParser:
     manifests aren't hot-reloaded the way YAML manifests are; re-running
     `toolpool discover` is the way to refresh.
     """
-    global _parser
+    global _parser, _last_scanned
+    from datetime import datetime, timezone
     _parser = ToolpoolParser.__new__(ToolpoolParser)
     _parser.config_path = None                           # sentinel: no YAML origin
     _parser._manifest = manifest
     _parser._reload_callbacks = []
+    _last_scanned = datetime.now(timezone.utc).isoformat()
     return _parser

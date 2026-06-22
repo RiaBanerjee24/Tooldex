@@ -13,6 +13,25 @@ import typer
 from toolpool.core.discovery.results import ConfigDetectionResult, ToolDiscoveryResult
 
 
+def print_banner(server_count: int, tool_count: int, url: str) -> None:
+    """Print the toolpool startup/rescan box to stdout."""
+    from toolpool import __version__
+
+    def _row(text: str, width: int = 50) -> str:
+        if len(text) > width:
+            text = text[: width - 1] + "…"
+        return f"║{text.ljust(width)}║"
+
+    typer.echo("\n  " + "╔" + "═" * 50 + "╗")
+    typer.echo("  " + _row(f"         toolpool  v{__version__}"))
+    typer.echo("  " + "╠" + "═" * 50 + "╣")
+    typer.echo("  " + _row(f"  Servers  {server_count}"))
+    typer.echo("  " + _row(f"  Tools    {tool_count}"))
+    typer.echo("  " + "╠" + "═" * 50 + "╣")
+    typer.echo("  " + _row(f"  →  {url}"))
+    typer.echo("  " + "╚" + "═" * 50 + "╝\n")
+
+
 def print_summary(
     config_result: ConfigDetectionResult,
     tool_results: list[ToolDiscoveryResult],
