@@ -1,0 +1,1198 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Autodiscover MCP servers across AI clients and surface them in a unified UI">
+      
+      
+      
+        <link rel="canonical" href="https://riabanerjee24.github.io/Toolpool/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Toolpool</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="stylesheets/extra.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#toolpool" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="Toolpool" class="md-header__button md-logo" aria-label="Toolpool" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Toolpool
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Toolpool
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RiaBanerjee24/Toolpool" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RiaBanerjee24/Toolpool
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="Toolpool" class="md-nav__button md-logo" aria-label="Toolpool" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Toolpool
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RiaBanerjee24/Toolpool" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RiaBanerjee24/Toolpool
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Toolpool
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Toolpool
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-discovery-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Discovery Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config File Locations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config File Locations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cursor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex CLI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp-json-shared-team-configs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP JSON (shared / team configs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-mcp-toolkit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker MCP Toolkit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-config-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Config Format
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP Config Format">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stdio-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stdio server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#http-sse-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP / SSE server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-codexconfigtoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex (~/.codex/config.toml)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-toolpool-detects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Toolpool Detects
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#global-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#toolpool-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        toolpool run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="toolpool run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#json-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#project-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-data-paths-one-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two Data Paths, One Manifest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rescan-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rescan Safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-mcp-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New MCP Client
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="toolpool">Toolpool<a class="headerlink" href="#toolpool" title="Permanent link">&para;</a></h1>
+<p>Toolpool autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.</p>
+<hr />
+<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Python 3.10 or later</li>
+<li>At least one supported MCP client configured (Claude Code, Cursor, Codex, or Docker MCP Toolkit)</li>
+</ul>
+<hr />
+<h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>toolpool
+</code></pre></div>
+<p>Verify:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>toolpool<span class="w"> </span>--version
+</code></pre></div>
+<hr />
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cd</span><span class="w"> </span>your-project
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>toolpool<span class="w"> </span>run
+</code></pre></div>
+<p>Toolpool scans config files, probes each discovered server for its tool surface, and opens the UI. The startup banner shows where to connect:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>  ╔══════════════════════════════════════════════════╗
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  ║         toolpool  v0.1.0                         ║
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  ╠══════════════════════════════════════════════════╣
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  ║  Servers  12                                     ║
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  ║  Tools    187                                    ║
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  ╠══════════════════════════════════════════════════╣
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  ║  →  http://127.0.0.1:8282                        ║
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  ╚══════════════════════════════════════════════════╝
+</code></pre></div>
+<p>To see the discovery summary without starting the server:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>toolpool<span class="w"> </span>run<span class="w"> </span>--no-serve
+</code></pre></div>
+<hr />
+<h2 id="how-discovery-works">How Discovery Works<a class="headerlink" href="#how-discovery-works" title="Permanent link">&para;</a></h2>
+<p>When you run <code>toolpool run</code>, the following happens in order:</p>
+<ol>
+<li>
+<p><strong>Config scan</strong> — Toolpool reads every known MCP config location for the current directory. Each found server gets a qualified ID in the form <code>{client}:{server_name}</code> so servers from different clients never collide.</p>
+</li>
+<li>
+<p><strong>Live probe</strong> — Each discovered server is contacted concurrently. Toolpool calls <code>tools/list</code> on it and records which tools it exposes, how long it took, and any errors.</p>
+</li>
+<li>
+<p><strong>Deduplication</strong> — If the same server name appears in multiple clients (e.g., <code>browserbase</code> in both Claude Code and Cursor), both are retained as separate entries under their respective clients.</p>
+</li>
+<li>
+<p><strong>UI</strong> — A local web server starts and serves the unified view.</p>
+</li>
+</ol>
+<hr />
+<h2 id="config-file-locations">Config File Locations<a class="headerlink" href="#config-file-locations" title="Permanent link">&para;</a></h2>
+<p>Toolpool checks all of the following on every run. Files that do not exist are skipped silently.</p>
+<h3 id="claude-code">Claude Code<a class="headerlink" href="#claude-code" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Global</td>
+<td><code>~/.claude.json</code></td>
+</tr>
+<tr>
+<td>Project</td>
+<td><code>&lt;project&gt;/.claude/mcp.json</code></td>
+</tr>
+<tr>
+<td>Project (flat)</td>
+<td><code>&lt;project&gt;/.claude.json</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="cursor">Cursor<a class="headerlink" href="#cursor" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Global</td>
+<td><code>~/.cursor/mcp.json</code></td>
+</tr>
+<tr>
+<td>Project</td>
+<td><code>&lt;project&gt;/.cursor/mcp.json</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="codex-cli">Codex CLI<a class="headerlink" href="#codex-cli" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Global</td>
+<td><code>~/.codex/config.toml</code></td>
+</tr>
+<tr>
+<td>Project</td>
+<td><code>&lt;project&gt;/.codex/config.toml</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="mcp-json-shared-team-configs">MCP JSON (shared / team configs)<a class="headerlink" href="#mcp-json-shared-team-configs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Global</td>
+<td><code>~/.mcp.json</code></td>
+</tr>
+<tr>
+<td>Project</td>
+<td><code>&lt;project&gt;/.mcp.json</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="docker-mcp-toolkit">Docker MCP Toolkit<a class="headerlink" href="#docker-mcp-toolkit" title="Permanent link">&para;</a></h3>
+<p>Toolpool reads all Docker MCP profiles via <code>docker mcp profile ls</code>. No additional configuration is needed.</p>
+<p>Project-scoped paths are discovered by walking up the directory tree from <code>cwd</code> until the home directory.</p>
+<hr />
+<h2 id="mcp-config-format">MCP Config Format<a class="headerlink" href="#mcp-config-format" title="Permanent link">&para;</a></h2>
+<p>All JSON-based clients use the same <code>mcpServers</code> structure. Toolpool understands both <code>stdio</code> (command-based) and <code>http</code>/<code>sse</code> (URL-based) transports.</p>
+<h3 id="stdio-server">stdio server<a class="headerlink" href="#stdio-server" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">&quot;filesystem&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;npx&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-y&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;/home/user&quot;</span><span class="p">],</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">        </span><span class="nt">&quot;SOME_VAR&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;value&quot;</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="http-sse-server">HTTP / SSE server<a class="headerlink" href="#http-sse-server" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">&quot;browserbase&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://mcp.browserbase.com/mcp&quot;</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">&quot;remote-api&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sse&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://api.example.com/mcp/sse&quot;</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="codex-codexconfigtoml">Codex (<code>~/.codex/config.toml</code>)<a class="headerlink" href="#codex-codexconfigtoml" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[mcp_servers.filesystem]</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;npx&quot;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-y&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">]</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">[mcp_servers.github]</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;http&quot;</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://api.githubcopilot.com/mcp/&quot;</span>
+</code></pre></div>
+<h3 id="what-toolpool-detects">What Toolpool Detects<a class="headerlink" href="#what-toolpool-detects" title="Permanent link">&para;</a></h3>
+<p>For each config file found:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td><code>found</code> / <code>not_found</code> / <code>empty</code> / <code>parse_error</code> / <code>read_error</code></td>
+</tr>
+<tr>
+<td><code>server_ids</code></td>
+<td>List of server names parsed from the file</td>
+</tr>
+<tr>
+<td><code>in_file_duplicates</code></td>
+<td>Server names that appeared more than once as JSON keys</td>
+</tr>
+</tbody>
+</table>
+<p>For each server probed:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td><code>found</code> / <code>timeout</code> / <code>connection_failed</code> / <code>protocol_error</code> / <code>missing_command</code></td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>Names, descriptions, and input schemas of every tool the server exposes</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td>Probe wall time</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>Human-readable failure message; includes install hints for missing runtimes (<code>uvx</code>, <code>npx</code>, <code>docker</code>, etc.)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>toolpool [OPTIONS] COMMAND [ARGS]
+</code></pre></div>
+<h3 id="global-options">Global options<a class="headerlink" href="#global-options" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--version</code>, <code>-V</code></td>
+<td>Print version and exit</td>
+</tr>
+<tr>
+<td><code>--help</code>, <code>-h</code></td>
+<td>Show help</td>
+</tr>
+</tbody>
+</table>
+<h3 id="toolpool-run"><code>toolpool run</code><a class="headerlink" href="#toolpool-run" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--port</code>, <code>-p</code></td>
+<td><code>8282</code></td>
+<td>Starting port. Increments automatically if occupied.</td>
+</tr>
+<tr>
+<td><code>--host</code></td>
+<td><code>127.0.0.1</code></td>
+<td>Interface to bind the UI server to.</td>
+</tr>
+<tr>
+<td><code>--no-serve</code></td>
+<td>off</td>
+<td>Print discovery summary and exit without starting the server.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>off</td>
+<td>Print discovery result as JSON and exit. Implies <code>--no-serve</code>. Does not probe servers.</td>
+</tr>
+<tr>
+<td><code>--timeout</code></td>
+<td><code>10.0</code></td>
+<td>Per-server probe timeout in seconds.</td>
+</tr>
+<tr>
+<td><code>--concurrency</code></td>
+<td><code>8</code></td>
+<td>Maximum concurrent server probes.</td>
+</tr>
+<tr>
+<td><code>--no-probe &lt;name&gt;</code></td>
+<td>—</td>
+<td>Skip probing a specific server by name. Repeatable.</td>
+</tr>
+<tr>
+<td><code>--config &lt;path&gt;</code></td>
+<td>—</td>
+<td>Additional MCP config file to include. Repeatable.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Discover and launch UI</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>toolpool<span class="w"> </span>run
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Custom port and host</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>toolpool<span class="w"> </span>run<span class="w"> </span>--port<span class="w"> </span><span class="m">9000</span><span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Just print what was found, don&#39;t start the server</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>toolpool<span class="w"> </span>run<span class="w"> </span>--no-serve
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Skip slow or broken servers during probing</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>toolpool<span class="w"> </span>run<span class="w"> </span>--no-probe<span class="w"> </span>node-api-docs<span class="w"> </span>--no-probe<span class="w"> </span>local-mcp
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># Pipe the discovery result into jq</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>toolpool<span class="w"> </span>run<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">&#39;.duplicates&#39;</span>
+</code></pre></div>
+<hr />
+<h2 id="json-output">JSON Output<a class="headerlink" href="#json-output" title="Permanent link">&para;</a></h2>
+<p><code>toolpool run --json</code> prints a single JSON object to stdout and exits. No servers are probed.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;sources&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">      </span><span class="nt">&quot;client&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;claude_code_user&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/home/user/.claude.json&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">      </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;found&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="nt">&quot;server_ids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;filesystem&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;github&quot;</span><span class="p">],</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">      </span><span class="nt">&quot;in_file_duplicates&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span><span class="p">],</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">  </span><span class="nt">&quot;servers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="nt">&quot;claude_code_user:filesystem&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;filesystem&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">      </span><span class="nt">&quot;transport&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;stdio&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;npx&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-y&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;@modelcontextprotocol/server-filesystem&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;/home/user&quot;</span><span class="p">]</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">  </span><span class="nt">&quot;duplicates&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">    </span><span class="s2">&quot;\&quot;filesystem\&quot; in cursor_user is also configured in claude_code_user&quot;</span>
+<a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="api-endpoints">API Endpoints<a class="headerlink" href="#api-endpoints" title="Permanent link">&para;</a></h2>
+<p>When the server is running (default <code>http://127.0.0.1:8282</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/agents</code></td>
+<td>All agents with server connections</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/agents/{id}</code></td>
+<td>Single agent detail</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/servers</code></td>
+<td>All servers; includes <code>scanned_at</code> timestamp</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/servers/{id}</code></td>
+<td>Single server with full tool detail</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/servers/{id}/rescan</code></td>
+<td>Re-probe a single server and update its tools in place</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/policy/matrix</code></td>
+<td>Agent × tool permission matrix</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/health</code></td>
+<td>Health check</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/rescan</code></td>
+<td>Full rediscovery — re-reads all configs and re-probes every server. Returns <code>{"status": "already_scanning"}</code> if a rescan is already running.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<h3 id="project-structure">Project Structure<a class="headerlink" href="#project-structure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>toolpool/
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>├── __init__.py              # __version__ via importlib.metadata
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>├── cli.py                   # Typer CLI — run command, flags, startup
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>├── _cli_output.py           # print_banner(), print_summary(), result_as_json()
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>├── settings.py              # debug flag
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>│
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>├── api/
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>│   ├── app.py               # FastAPI factory, CORS, SPA mount
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>│   ├── deps.py              # FastAPI dependency: get_manifest()
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>│   └── routers/
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>│       ├── health.py        # GET /api/health, POST /api/rescan
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>│       ├── agents.py        # GET /api/agents, /api/agents/{id}
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>│       ├── servers.py       # GET /api/servers, /api/servers/{id}, POST /api/servers/{id}/rescan
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>│       ├── policy.py        # GET /api/policy/matrix
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>│       └── analysis.py      # GET /api/conflicts, /api/orchestration
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>│
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>└── core/
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    ├── models/
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>    │   ├── manifest.py      # ToolpoolManifest — central aggregate
+<a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>    │   ├── server.py        # MCPServer, DiscoveredToolLite
+<a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>    │   ├── agent.py         # Agent, AgentServerRef
+<a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>    │   ├── tool.py          # Tool, Permission, effective_access()
+<a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a>    │   └── policy.py        # PolicyEngine, AgentPolicy
+<a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>    │
+<a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>    ├── parsers/             # YAML manifest pipeline
+<a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a>    │   ├── parser.py        # ToolpoolParser orchestrator + singleton
+<a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>    │   ├── loader.py        # File I/O, glob resolution
+<a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a>    │   ├── transformers.py  # raw dict → Pydantic models
+<a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a>    │   ├── merger.py        # Conflict detection + merging
+<a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a>    │   └── orchestration.py # Delegation graph DFS + cycle classification
+<a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a>    │
+<a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a>    └── discovery/           # Autodiscovery pipeline
+<a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a>        ├── config_detector.py   # detect_all(), qualified IDs
+<a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a>        ├── _paths.py            # Platform-aware path resolvers
+<a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a>        ├── _readers.py          # read_json(), read_claude_json(), read_codex_toml()
+<a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a>        ├── _parsers.py          # Dict → MCPServer, env var substitution
+<a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a>        ├── results.py           # DiscoverySource, ToolDiscoveryResult
+<a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a>        ├── mcp_client.py        # Async prober: stdio / http / sse
+<a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a>        ├── tool_discovery.py    # Sync wrappers, asyncio bridge
+<a id="__codelineno-11-40" name="__codelineno-11-40" href="#__codelineno-11-40"></a>        ├── to_manifest.py       # Discovery output → ToolpoolManifest
+<a id="__codelineno-11-41" name="__codelineno-11-41" href="#__codelineno-11-41"></a>        ├── _docker_mcp.py       # Docker MCP profile reader
+<a id="__codelineno-11-42" name="__codelineno-11-42" href="#__codelineno-11-42"></a>        ├── _status_claude.py    # Enrich via `claude mcp list`
+<a id="__codelineno-11-43" name="__codelineno-11-43" href="#__codelineno-11-43"></a>        ├── _status_codex.py     # Enrich via `codex mcp list`
+<a id="__codelineno-11-44" name="__codelineno-11-44" href="#__codelineno-11-44"></a>        └── _status_cursor.py    # Enrich via `cursor-agent mcp list-tools`
+</code></pre></div>
+<h3 id="two-data-paths-one-manifest">Two Data Paths, One Manifest<a class="headerlink" href="#two-data-paths-one-manifest" title="Permanent link">&para;</a></h3>
+<p>Two independent pipelines produce the same <code>ToolpoolManifest</code>, so the API layer and UI are unaware of how data arrived.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>YAML path:
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  toolpool.yml
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    → loader → transformers → merger → orchestration
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    → ToolpoolManifest
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>Discovery path:
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>  MCP client config files
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>    → config_detector → mcp_client → tool_discovery → to_manifest
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>    → ToolpoolManifest
+</code></pre></div>
+<p>Both paths terminate at <code>init_parser_from_manifest()</code> in <code>parser.py</code>, which installs the manifest into the module-level singleton. The YAML path is richer (agents, policy, orchestration graph). The discovery path produces servers and tools — agent discovery is planned for Phase 2.</p>
+<h3 id="discovery-pipeline">Discovery Pipeline<a class="headerlink" href="#discovery-pipeline" title="Permanent link">&para;</a></h3>
+<p><strong>Config detection</strong> (<code>config_detector.py</code>) reads config files in priority order: custom <code>--config</code> paths first, then Claude Code global, Codex, Cursor, MCP JSON, and Docker MCP Toolkit profiles. Every server gets a qualified ID (<code>{client}:{server_id}</code>) so cross-client name collisions are preserved as separate entries rather than clobbered.</p>
+<p><strong>Live probing</strong> (<code>mcp_client.py</code>) is fully async. <code>probe_server()</code> routes by transport — <code>stdio</code> spawns a subprocess via the MCP SDK, <code>http</code>/<code>sse</code> connect via the respective MCP client. A <code>FileNotFoundError</code> on the server command produces a <code>connection_failed</code> result with a human-readable hint (e.g. <code>'uvx' is not installed — install uv: https://astral.sh/uv</code>). <code>probe_all()</code> runs probes concurrently under a <code>Semaphore</code> (default concurrency: 8).</p>
+<p><strong>Manifest assembly</strong> (<code>to_manifest.py</code>) attaches each <code>ToolDiscoveryResult</code> to its <code>MCPServer</code> as <code>discovered_tools</code>, <code>probe_status</code>, and <code>probe_error</code>. <code>probe_status</code> is the canonical failure signal used by the UI — it takes precedence over <code>connection_status</code>, which is a secondary signal from optional agent CLI enrichment.</p>
+<h3 id="rescan-safety">Rescan Safety<a class="headerlink" href="#rescan-safety" title="Permanent link">&para;</a></h3>
+<p>The <code>POST /api/rescan</code> endpoint uses two mechanisms to stay safe under concurrent requests:</p>
+<ul>
+<li><strong><code>asyncio.Lock</code></strong> — if a rescan is already running, the endpoint returns <code>{"status": "already_scanning"}</code> immediately. No caller ever waits.</li>
+<li><strong><code>_silenced(fn)</code></strong> — redirects fd 1 and fd 2 to <code>/dev/null</code> for the duration of <code>detect_all()</code> and <code>list_tools_for_all()</code> to suppress subprocess noise, then restores them for the structured terminal output that follows.</li>
+</ul>
+<p>All subprocess calls pass <code>stdin=subprocess.DEVNULL</code> to prevent interactive permission prompts from inheriting the terminal's stdin and blocking the request.</p>
+<h3 id="adding-a-new-mcp-client">Adding a New MCP Client<a class="headerlink" href="#adding-a-new-mcp-client" title="Permanent link">&para;</a></h3>
+<p><strong>1. Add path resolvers</strong> in <code>_paths.py</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span> <span class="nf">windsurf_user_path</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="k">return</span> <span class="n">Path</span><span class="o">.</span><span class="n">home</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;.windsurf&quot;</span> <span class="o">/</span> <span class="s2">&quot;mcp.json&quot;</span>
+</code></pre></div>
+<p><strong>2. Register in <code>build_plan()</code></strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">(</span><span class="s2">&quot;windsurf_user&quot;</span><span class="p">,</span> <span class="n">windsurf_user_path</span><span class="p">),</span>
+</code></pre></div>
+<p><strong>3. Add a status enrichment module</strong> (optional) — follow the pattern of <code>_status_cursor.py</code> and add a call site in <code>detect_all()</code>.</p>
+<p><strong>4. Add an agent CLI fallback</strong> (optional) in <code>mcp_client.py</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">_AGENT_FALLBACK_CMDS</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="s2">&quot;cursor&quot;</span><span class="p">:</span>   <span class="p">[</span><span class="s2">&quot;cursor-agent&quot;</span><span class="p">,</span> <span class="s2">&quot;mcp&quot;</span><span class="p">,</span> <span class="s2">&quot;list-tools&quot;</span><span class="p">],</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="s2">&quot;windsurf&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;windsurf&quot;</span><span class="p">,</span>     <span class="s2">&quot;mcp&quot;</span><span class="p">,</span> <span class="s2">&quot;list-tools&quot;</span><span class="p">],</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="p">}</span>
+</code></pre></div>
+<p>No changes needed to <code>_readers.py</code> or <code>_parsers.py</code> if the client uses the standard <code>{"mcpServers": {...}}</code> JSON format.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["toc.integrate", "navigation.top", "search.highlight", "search.suggest", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,388 @@
+# Toolpool
+
+Toolpool autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+
+---
+
+## Requirements
+
+- Python 3.10 or later
+- At least one supported MCP client configured (Claude Code, Cursor, Codex, or Docker MCP Toolkit)
+
+---
+
+## Installation
+
+```bash
+pip install toolpool
+```
+
+Verify:
+
+```bash
+toolpool --version
+```
+
+---
+
+## Quick Start
+
+```bash
+cd your-project
+toolpool run
+```
+
+Toolpool scans config files, probes each discovered server for its tool surface, and opens the UI. The startup banner shows where to connect:
+
+```
+  ╔══════════════════════════════════════════════════╗
+  ║         toolpool  v0.1.0                         ║
+  ╠══════════════════════════════════════════════════╣
+  ║  Servers  12                                     ║
+  ║  Tools    187                                    ║
+  ╠══════════════════════════════════════════════════╣
+  ║  →  http://127.0.0.1:8282                        ║
+  ╚══════════════════════════════════════════════════╝
+```
+
+To see the discovery summary without starting the server:
+
+```bash
+toolpool run --no-serve
+```
+
+---
+
+## How Discovery Works
+
+When you run `toolpool run`, the following happens in order:
+
+1. **Config scan** — Toolpool reads every known MCP config location for the current directory. Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
+
+2. **Live probe** — Each discovered server is contacted concurrently. Toolpool calls `tools/list` on it and records which tools it exposes, how long it took, and any errors.
+
+3. **Deduplication** — If the same server name appears in multiple clients (e.g., `browserbase` in both Claude Code and Cursor), both are retained as separate entries under their respective clients.
+
+4. **UI** — A local web server starts and serves the unified view.
+
+---
+
+## Config File Locations
+
+Toolpool checks all of the following on every run. Files that do not exist are skipped silently.
+
+### Claude Code
+
+| Scope | Path |
+|---|---|
+| Global | `~/.claude.json` |
+| Project | `<project>/.claude/mcp.json` |
+| Project (flat) | `<project>/.claude.json` |
+
+### Cursor
+
+| Scope | Path |
+|---|---|
+| Global | `~/.cursor/mcp.json` |
+| Project | `<project>/.cursor/mcp.json` |
+
+### Codex CLI
+
+| Scope | Path |
+|---|---|
+| Global | `~/.codex/config.toml` |
+| Project | `<project>/.codex/config.toml` |
+
+### MCP JSON (shared / team configs)
+
+| Scope | Path |
+|---|---|
+| Global | `~/.mcp.json` |
+| Project | `<project>/.mcp.json` |
+
+### Docker MCP Toolkit
+
+Toolpool reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
+
+Project-scoped paths are discovered by walking up the directory tree from `cwd` until the home directory.
+
+---
+
+## MCP Config Format
+
+All JSON-based clients use the same `mcpServers` structure. Toolpool understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
+
+### stdio server
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"],
+      "env": {
+        "SOME_VAR": "value"
+      }
+    }
+  }
+}
+```
+
+### HTTP / SSE server
+
+```json
+{
+  "mcpServers": {
+    "browserbase": {
+      "type": "http",
+      "url": "https://mcp.browserbase.com/mcp"
+    },
+    "remote-api": {
+      "type": "sse",
+      "url": "https://api.example.com/mcp/sse"
+    }
+  }
+}
+```
+
+### Codex (`~/.codex/config.toml`)
+
+```toml
+[mcp_servers.filesystem]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
+
+[mcp_servers.github]
+type = "http"
+url = "https://api.githubcopilot.com/mcp/"
+```
+
+### What Toolpool Detects
+
+For each config file found:
+
+| Field | Description |
+|---|---|
+| `status` | `found` / `not_found` / `empty` / `parse_error` / `read_error` |
+| `server_ids` | List of server names parsed from the file |
+| `in_file_duplicates` | Server names that appeared more than once as JSON keys |
+
+For each server probed:
+
+| Field | Description |
+|---|---|
+| `status` | `found` / `timeout` / `connection_failed` / `protocol_error` / `missing_command` |
+| `tools` | Names, descriptions, and input schemas of every tool the server exposes |
+| `duration_ms` | Probe wall time |
+| `error` | Human-readable failure message; includes install hints for missing runtimes (`uvx`, `npx`, `docker`, etc.) |
+
+---
+
+## CLI Reference
+
+```
+toolpool [OPTIONS] COMMAND [ARGS]
+```
+
+### Global options
+
+| Flag | Description |
+|---|---|
+| `--version`, `-V` | Print version and exit |
+| `--help`, `-h` | Show help |
+
+### `toolpool run`
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port`, `-p` | `8282` | Starting port. Increments automatically if occupied. |
+| `--host` | `127.0.0.1` | Interface to bind the UI server to. |
+| `--no-serve` | off | Print discovery summary and exit without starting the server. |
+| `--json` | off | Print discovery result as JSON and exit. Implies `--no-serve`. Does not probe servers. |
+| `--timeout` | `10.0` | Per-server probe timeout in seconds. |
+| `--concurrency` | `8` | Maximum concurrent server probes. |
+| `--no-probe <name>` | — | Skip probing a specific server by name. Repeatable. |
+| `--config <path>` | — | Additional MCP config file to include. Repeatable. |
+
+#### Examples
+
+```bash
+# Discover and launch UI
+toolpool run
+
+# Custom port and host
+toolpool run --port 9000 --host 0.0.0.0
+
+# Just print what was found, don't start the server
+toolpool run --no-serve
+
+# Skip slow or broken servers during probing
+toolpool run --no-probe node-api-docs --no-probe local-mcp
+
+# Pipe the discovery result into jq
+toolpool run --json | jq '.duplicates'
+```
+
+---
+
+## JSON Output
+
+`toolpool run --json` prints a single JSON object to stdout and exits. No servers are probed.
+
+```json
+{
+  "sources": [
+    {
+      "client": "claude_code_user",
+      "path": "/home/user/.claude.json",
+      "status": "found",
+      "server_ids": ["filesystem", "github"],
+      "in_file_duplicates": []
+    }
+  ],
+  "servers": {
+    "claude_code_user:filesystem": {
+      "name": "filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"]
+    }
+  },
+  "duplicates": [
+    "\"filesystem\" in cursor_user is also configured in claude_code_user"
+  ]
+}
+```
+
+---
+
+## API Endpoints
+
+When the server is running (default `http://127.0.0.1:8282`):
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/agents` | All agents with server connections |
+| `GET` | `/api/agents/{id}` | Single agent detail |
+| `GET` | `/api/servers` | All servers; includes `scanned_at` timestamp |
+| `GET` | `/api/servers/{id}` | Single server with full tool detail |
+| `POST` | `/api/servers/{id}/rescan` | Re-probe a single server and update its tools in place |
+| `GET` | `/api/policy/matrix` | Agent × tool permission matrix |
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/rescan` | Full rediscovery — re-reads all configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already running. |
+
+---
+
+## Architecture
+
+### Project Structure
+
+```
+toolpool/
+├── __init__.py              # __version__ via importlib.metadata
+├── cli.py                   # Typer CLI — run command, flags, startup
+├── _cli_output.py           # print_banner(), print_summary(), result_as_json()
+├── settings.py              # debug flag
+│
+├── api/
+│   ├── app.py               # FastAPI factory, CORS, SPA mount
+│   ├── deps.py              # FastAPI dependency: get_manifest()
+│   └── routers/
+│       ├── health.py        # GET /api/health, POST /api/rescan
+│       ├── agents.py        # GET /api/agents, /api/agents/{id}
+│       ├── servers.py       # GET /api/servers, /api/servers/{id}, POST /api/servers/{id}/rescan
+│       ├── policy.py        # GET /api/policy/matrix
+│       └── analysis.py      # GET /api/conflicts, /api/orchestration
+│
+└── core/
+    ├── models/
+    │   ├── manifest.py      # ToolpoolManifest — central aggregate
+    │   ├── server.py        # MCPServer, DiscoveredToolLite
+    │   ├── agent.py         # Agent, AgentServerRef
+    │   ├── tool.py          # Tool, Permission, effective_access()
+    │   └── policy.py        # PolicyEngine, AgentPolicy
+    │
+    ├── parsers/             # YAML manifest pipeline
+    │   ├── parser.py        # ToolpoolParser orchestrator + singleton
+    │   ├── loader.py        # File I/O, glob resolution
+    │   ├── transformers.py  # raw dict → Pydantic models
+    │   ├── merger.py        # Conflict detection + merging
+    │   └── orchestration.py # Delegation graph DFS + cycle classification
+    │
+    └── discovery/           # Autodiscovery pipeline
+        ├── config_detector.py   # detect_all(), qualified IDs
+        ├── _paths.py            # Platform-aware path resolvers
+        ├── _readers.py          # read_json(), read_claude_json(), read_codex_toml()
+        ├── _parsers.py          # Dict → MCPServer, env var substitution
+        ├── results.py           # DiscoverySource, ToolDiscoveryResult
+        ├── mcp_client.py        # Async prober: stdio / http / sse
+        ├── tool_discovery.py    # Sync wrappers, asyncio bridge
+        ├── to_manifest.py       # Discovery output → ToolpoolManifest
+        ├── _docker_mcp.py       # Docker MCP profile reader
+        ├── _status_claude.py    # Enrich via `claude mcp list`
+        ├── _status_codex.py     # Enrich via `codex mcp list`
+        └── _status_cursor.py    # Enrich via `cursor-agent mcp list-tools`
+```
+
+### Two Data Paths, One Manifest
+
+Two independent pipelines produce the same `ToolpoolManifest`, so the API layer and UI are unaware of how data arrived.
+
+```
+YAML path:
+  toolpool.yml
+    → loader → transformers → merger → orchestration
+    → ToolpoolManifest
+
+Discovery path:
+  MCP client config files
+    → config_detector → mcp_client → tool_discovery → to_manifest
+    → ToolpoolManifest
+```
+
+Both paths terminate at `init_parser_from_manifest()` in `parser.py`, which installs the manifest into the module-level singleton. The YAML path is richer (agents, policy, orchestration graph). The discovery path produces servers and tools — agent discovery is planned for Phase 2.
+
+### Discovery Pipeline
+
+**Config detection** (`config_detector.py`) reads config files in priority order: custom `--config` paths first, then Claude Code global, Codex, Cursor, MCP JSON, and Docker MCP Toolkit profiles. Every server gets a qualified ID (`{client}:{server_id}`) so cross-client name collisions are preserved as separate entries rather than clobbered.
+
+**Live probing** (`mcp_client.py`) is fully async. `probe_server()` routes by transport — `stdio` spawns a subprocess via the MCP SDK, `http`/`sse` connect via the respective MCP client. A `FileNotFoundError` on the server command produces a `connection_failed` result with a human-readable hint (e.g. `'uvx' is not installed — install uv: https://astral.sh/uv`). `probe_all()` runs probes concurrently under a `Semaphore` (default concurrency: 8).
+
+**Manifest assembly** (`to_manifest.py`) attaches each `ToolDiscoveryResult` to its `MCPServer` as `discovered_tools`, `probe_status`, and `probe_error`. `probe_status` is the canonical failure signal used by the UI — it takes precedence over `connection_status`, which is a secondary signal from optional agent CLI enrichment.
+
+### Rescan Safety
+
+The `POST /api/rescan` endpoint uses two mechanisms to stay safe under concurrent requests:
+
+- **`asyncio.Lock`** — if a rescan is already running, the endpoint returns `{"status": "already_scanning"}` immediately. No caller ever waits.
+- **`_silenced(fn)`** — redirects fd 1 and fd 2 to `/dev/null` for the duration of `detect_all()` and `list_tools_for_all()` to suppress subprocess noise, then restores them for the structured terminal output that follows.
+
+All subprocess calls pass `stdin=subprocess.DEVNULL` to prevent interactive permission prompts from inheriting the terminal's stdin and blocking the request.
+
+### Adding a New MCP Client
+
+**1. Add path resolvers** in `_paths.py`:
+
+```python
+def windsurf_user_path() -> Path:
+    return Path.home() / ".windsurf" / "mcp.json"
+```
+
+**2. Register in `build_plan()`**:
+
+```python
+("windsurf_user", windsurf_user_path),
+```
+
+**3. Add a status enrichment module** (optional) — follow the pattern of `_status_cursor.py` and add a call site in `detect_all()`.
+
+**4. Add an agent CLI fallback** (optional) in `mcp_client.py`:
+
+```python
+_AGENT_FALLBACK_CMDS = {
+    "cursor":   ["cursor-agent", "mcp", "list-tools"],
+    "windsurf": ["windsurf",     "mcp", "list-tools"],
+}
+```
+
+No changes needed to `_readers.py` or `_parsers.py` if the client uses the standard `{"mcpServers": {...}}` JSON format.

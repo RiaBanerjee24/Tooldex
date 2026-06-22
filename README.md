@@ -195,6 +195,7 @@ For each server probed:
 - **`status`** — `found` / `timeout` / `connection_failed` / `protocol_error` / `missing_command`
 - **`tools`** — names, descriptions, and input schemas of every tool the server exposes
 - **`duration_ms`** — probe wall time
+- **`error`** — human-readable failure message when status is not `found`; includes install hints for common missing runtimes (`uvx`, `npx`, `docker`, etc.)
 
 ---
 
@@ -322,10 +323,12 @@ When the server is running (default `http://127.0.0.1:8282`):
 |---|---|---|
 | `GET` | `/api/agents` | All agents with server connections |
 | `GET` | `/api/agents/{id}` | Single agent with resolved servers and tools |
-| `GET` | `/api/servers` | All servers with connected agents |
+| `GET` | `/api/servers` | All servers with connected agents; includes `scanned_at` timestamp |
 | `GET` | `/api/servers/{id}` | Single server with full agent and tool detail |
+| `POST` | `/api/servers/{id}/rescan` | Re-probe a single server and update its tools in place |
 | `GET` | `/api/policy/matrix` | Agent × tool permission matrix |
 | `GET` | `/api/health` | Health check |
+| `POST` | `/api/rescan` | Full rediscovery: re-reads all MCP configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already in progress. |
 
 ---
 

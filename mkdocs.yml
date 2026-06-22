@@ -1,0 +1,40 @@
+site_name: Toolpool
+site_url: https://riabanerjee24.github.io/Toolpool/
+site_description: Autodiscover MCP servers across AI clients and surface them in a unified UI
+repo_url: https://github.com/RiaBanerjee24/Toolpool
+repo_name: RiaBanerjee24/Toolpool
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: custom
+    accent: custom
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - toc.integrate
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition
+  - tables
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+
+nav:
+  - Toolpool: index.md
+
+extra_css:
+  - stylesheets/extra.css

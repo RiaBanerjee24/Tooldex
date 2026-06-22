@@ -24,16 +24,16 @@ Technical reference for contributors. Covers architecture, data flow, design dec
 toolpool/
 ├── __init__.py              # __version__ via importlib.metadata
 ├── cli.py                   # Typer CLI — run command, flags, startup
-├── _cli_output.py           # print_summary(), result_as_json()
+├── _cli_output.py           # print_banner(), print_summary(), result_as_json()
 ├── settings.py              # debug flag (controls /api/docs exposure)
 │
 ├── api/
 │   ├── app.py               # FastAPI factory, CORS, SPA mount
 │   ├── deps.py              # FastAPI dependency: get_manifest()
 │   └── routers/
-│       ├── health.py        # GET /api/health
+│       ├── health.py        # GET /api/health, POST /api/rescan (full rediscovery)
 │       ├── agents.py        # GET /api/agents, /api/agents/{id}
-│       ├── servers.py       # GET /api/servers, /api/servers/{id}
+│       ├── servers.py       # GET /api/servers, /api/servers/{id}, POST /api/servers/{id}/rescan
 │       ├── policy.py        # GET /api/policy/matrix, /engines, /engines/{id}/raw
 │       └── analysis.py      # GET /api/conflicts, /api/orchestration
 │
@@ -147,7 +147,7 @@ Every failure mode (timeout, missing command, protocol error, missing SDK) is ca
 
 ### 3. Manifest assembly (`to_manifest.py`)
 
-`build_manifest()` attaches `ToolDiscoveryResult` data to each `MCPServer` as a list of `DiscoveredToolLite`, then constructs a `ToolpoolManifest`. The `agents` dict is empty in Phase 1. The result has the same shape as a YAML-parsed manifest, so `init_parser_from_manifest()` and the API routers require no changes.
+`build_manifest()` attaches `ToolDiscoveryResult` data to each `MCPServer` as a list of `DiscoveredToolLite`, and also stores `probe_status` (`result.status.value`) and `probe_error` (`result.error`) directly on the `MCPServer`. These two fields are the authoritative probe outcome — the UI uses `probe_status` as its primary signal for failure badges and status colours, falling back to `connection_status` only when `probe_status` is absent. The `agents` dict is empty in Phase 1. The result has the same shape as a YAML-parsed manifest, so `init_parser_from_manifest()` and the API routers require no changes.
 
 ---
 
@@ -210,7 +210,7 @@ sync caller (cli.py)
 
 `asyncio.run()` is preferred over manually creating and closing an event loop because it handles cleanup (cancelling pending tasks) correctly. The running-loop check in `_run()` handles embedded contexts (pytest-anyio, Jupyter) where `asyncio.run()` would raise.
 
-FastAPI's own event loop (used by uvicorn) is completely separate. The sync API handlers never enter the MCP probing loop — probing happens once at startup before uvicorn is launched.
+FastAPI's own event loop (used by uvicorn) is completely separate from the CLI probing loop. The sync API handlers never block the event loop — the single-server `POST /api/servers/{id}/rescan` endpoint uses `asyncio.to_thread()` to run the sync `list_tools_for` call in the thread pool, keeping the uvicorn event loop free. The full `POST /api/rescan` runs the blocking discovery pipeline similarly via `asyncio.to_thread()`, guarded by an `asyncio.Lock` so concurrent requests don't stack up.
 
 ---
 
@@ -232,7 +232,7 @@ Private fields on a Pydantic model use underscore prefix and are set directly af
 
 ### `MCPServer` (`server.py`)
 
-Holds transport config (`command`/`args`/`env` for stdio, `url` for http/sse) plus runtime-populated fields: `discovered_tools` (from probing), `client` (which config source it came from), `source_path`, `connection_status`. The split between declaration fields and runtime fields is intentional — YAML-only manifests have empty `discovered_tools`; discovery-only manifests have empty `agent`-related fields.
+Holds transport config (`command`/`args`/`env` for stdio, `url` for http/sse) plus runtime-populated fields: `discovered_tools` (from probing), `client` (which config source it came from), `source_path`, `connection_status`, `probe_status`, and `probe_error`. `probe_status` is the raw `ToolDiscoveryStatus.value` string (`"found"` / `"connection_failed"` / etc.); `probe_error` is the human-readable failure message. `connection_status` comes from optional agent CLI enrichment (`claude mcp list` etc.) and is a secondary signal — present only when the enrichment step runs and the client responded. The split between declaration fields and runtime fields is intentional — YAML-only manifests have empty `discovered_tools`; discovery-only manifests have empty agent-related fields.
 
 ### `Tool` (`tool.py`)
 
@@ -265,6 +265,13 @@ All routers are read-only. No endpoint mutates the manifest. Response shapes are
 **`policy.py`**: `policy_matrix` iterates `manifest.agents × manifest.all_tools` and uses `manifest.agent_tool_access(agent_id, tool_name)` (backed by `agent_tool_index`) for O(1) per-cell lookup. Without the index, a naive scan would be O(agents × servers × tools) per request.
 
 **`analysis.py`**: `orchestration_overview` returns the full delegation edge list plus issues. Uses `itertools.groupby` on issues sorted by type to produce per-type counts.
+
+**`health.py`**: Hosts `POST /api/rescan` — the full rediscovery endpoint. Two safety mechanisms:
+
+- **`_rescan_lock` (`asyncio.Lock`)**: If a rescan is already in progress, the endpoint returns `{"status": "already_scanning"}` immediately rather than queueing a second concurrent run. Lock acquisition is non-blocking (`locked()` check only) — no caller ever waits.
+- **`_silenced(fn, *args)`**: A context that redirects fd 1 and 2 to `/dev/null` for the duration of a call. Used to suppress subprocess noise during `detect_all()` and `list_tools_for_all()` (which can write to stdout/stderr) without affecting the structured terminal output that follows. This is the same fd-level approach used at CLI startup. It is safe under the lock because only one rescan runs at a time.
+
+All subprocess calls in `_status_*.py` pass `stdin=subprocess.DEVNULL` to prevent interactive permission prompts (from Claude Code's auth system) from inheriting the terminal's stdin and blocking the request for up to 15 seconds.
 
 ---
 
