@@ -1,6 +1,6 @@
 # Toolpool
 
-Toolpool autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+Toolpool autodiscovers MCP servers configured across your AI clients - Claude Code, Cursor, Codex, Docker MCP Toolkit, and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
 
 ---
 
@@ -59,7 +59,7 @@ When you run `toolpool run`, the following happens in order:
 
 1. **Config scan** — Toolpool reads every known MCP config location for the current directory. Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
 
-2. **Live probe** — Each discovered server is contacted concurrently. Toolpool calls `tools/list` on it and records which tools it exposes, how long it took, and any errors.
+2. **Live probe** — Each discovered server is contacted concurrently. Toolpool calls `tools/list` on it and records which tools it exposes, and any errors.
 
 3. **Deduplication** — If the same server name appears in multiple clients (e.g., `browserbase` in both Claude Code and Cursor), both are retained as separate entries under their respective clients.
 
@@ -258,18 +258,16 @@ toolpool run --json | jq '.duplicates'
 
 ## API Endpoints
 
-When the server is running (default `http://127.0.0.1:8282`):
+When the server is running (default `http://127.0.0.1:8282`). All endpoints respond with or without a trailing slash.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/agents` | All agents with server connections |
-| `GET` | `/api/agents/{id}` | Single agent detail |
-| `GET` | `/api/servers` | All servers; includes `scanned_at` timestamp |
-| `GET` | `/api/servers/{id}` | Single server with full tool detail |
-| `POST` | `/api/servers/{id}/rescan` | Re-probe a single server and update its tools in place |
-| `GET` | `/api/policy/matrix` | Agent × tool permission matrix |
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/rescan` | Full rediscovery — re-reads all configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already running. |
+| `GET` | `/api/health/` | `status`, current `timestamp`, and `uptime_seconds` since the server started |
+| `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file` |
+| `GET` | `/api/servers/{id}/` | Single server with full tool detail |
+| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server and update its tools in place |
+| `GET` | `/api/files/` | All config files that were scanned: path, client, status, server IDs found, any parse errors |
+| `POST` | `/api/rescan/` | Full rediscovery — re-reads all configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already running. |
 
 ---
 
@@ -286,30 +284,20 @@ toolpool/
 │
 ├── api/
 │   ├── app.py               # FastAPI factory, CORS, SPA mount
-│   ├── deps.py              # FastAPI dependency: get_manifest()
 │   └── routers/
-│       ├── health.py        # GET /api/health, POST /api/rescan
-│       ├── agents.py        # GET /api/agents, /api/agents/{id}
-│       ├── servers.py       # GET /api/servers, /api/servers/{id}, POST /api/servers/{id}/rescan
-│       ├── policy.py        # GET /api/policy/matrix
-│       └── analysis.py      # GET /api/conflicts, /api/orchestration
+│       ├── health.py        # GET /api/health/, POST /api/rescan/
+│       ├── servers.py       # GET /api/servers/, /api/servers/{id}/, POST /api/servers/{id}/rescan/
+│       └── files.py         # GET /api/files/
 │
 └── core/
     ├── models/
-    │   ├── manifest.py      # ToolpoolManifest — central aggregate
-    │   ├── server.py        # MCPServer, DiscoveredToolLite
-    │   ├── agent.py         # Agent, AgentServerRef
-    │   ├── tool.py          # Tool, Permission, effective_access()
-    │   └── policy.py        # PolicyEngine, AgentPolicy
+    │   ├── manifest.py      # ToolpoolManifest, ToolpoolMetadata
+    │   └── server.py        # MCPServer, DiscoveredToolLite
     │
-    ├── parsers/             # YAML manifest pipeline
-    │   ├── parser.py        # ToolpoolParser orchestrator + singleton
-    │   ├── loader.py        # File I/O, glob resolution
-    │   ├── transformers.py  # raw dict → Pydantic models
-    │   ├── merger.py        # Conflict detection + merging
-    │   └── orchestration.py # Delegation graph DFS + cycle classification
+    ├── parsers/
+    │   └── parser.py        # Module-level singleton: get_parser(), init_parser_from_manifest()
     │
-    └── discovery/           # Autodiscovery pipeline
+    └── discovery/
         ├── config_detector.py   # detect_all(), qualified IDs
         ├── _paths.py            # Platform-aware path resolvers
         ├── _readers.py          # read_json(), read_claude_json(), read_codex_toml()
@@ -323,24 +311,6 @@ toolpool/
         ├── _status_codex.py     # Enrich via `codex mcp list`
         └── _status_cursor.py    # Enrich via `cursor-agent mcp list-tools`
 ```
-
-### Two Data Paths, One Manifest
-
-Two independent pipelines produce the same `ToolpoolManifest`, so the API layer and UI are unaware of how data arrived.
-
-```
-YAML path:
-  toolpool.yml
-    → loader → transformers → merger → orchestration
-    → ToolpoolManifest
-
-Discovery path:
-  MCP client config files
-    → config_detector → mcp_client → tool_discovery → to_manifest
-    → ToolpoolManifest
-```
-
-Both paths terminate at `init_parser_from_manifest()` in `parser.py`, which installs the manifest into the module-level singleton. The YAML path is richer (agents, policy, orchestration graph). The discovery path produces servers and tools — agent discovery is planned for Phase 2.
 
 ### Discovery Pipeline
 

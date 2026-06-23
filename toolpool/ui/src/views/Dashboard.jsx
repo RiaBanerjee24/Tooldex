@@ -23,6 +23,7 @@ export function Dashboard({ health, serversData, onNavigateServers, onNavigateTo
     const servers = serversData.servers || []
     const discoveredTools = servers.reduce((n, s) => n + (s.discovered_tool_count || 0), 0)
 
+
     const connected = servers.filter(s => {
         if (s.probe_status != null) return s.probe_status === "found"
         return s.connection_status === "connected" || s.connection_status === "enabled"

@@ -12,8 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from toolpool.core.parsers.parser import get_parser
-from toolpool.api.routers import analysis, health, agents, servers, policy
+from toolpool.api.routers import health, servers, files
 from toolpool import settings, version
 
 logger = logging.getLogger("toolpool.api")
@@ -44,11 +43,9 @@ def create_app() -> FastAPI:
     )
 
     # API routes
-    app.include_router(health.router,    prefix="/api", tags=["health"])
-    app.include_router(agents.router,    prefix="/api", tags=["agents"])
-    app.include_router(servers.router,   prefix="/api", tags=["servers"])
-    app.include_router(policy.router,    prefix="/api", tags=["policy"])
-    app.include_router(analysis.router,  prefix="/api", tags=["analysis"])
+    app.include_router(health.router,  prefix="/api", tags=["health"])
+    app.include_router(servers.router, prefix="/api", tags=["servers"])
+    app.include_router(files.router,   prefix="/api", tags=["files"])
 
 
     # Serve pre-built React UI

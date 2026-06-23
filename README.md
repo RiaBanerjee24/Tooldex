@@ -319,16 +319,16 @@ toolpool run --json | jq '.duplicates'
 
 When the server is running (default `http://127.0.0.1:8282`):
 
+All endpoints respond with or without a trailing slash.
+
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/agents` | All agents with server connections |
-| `GET` | `/api/agents/{id}` | Single agent with resolved servers and tools |
-| `GET` | `/api/servers` | All servers with connected agents; includes `scanned_at` timestamp |
-| `GET` | `/api/servers/{id}` | Single server with full agent and tool detail |
-| `POST` | `/api/servers/{id}/rescan` | Re-probe a single server and update its tools in place |
-| `GET` | `/api/policy/matrix` | Agent × tool permission matrix |
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/rescan` | Full rediscovery: re-reads all MCP configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already in progress. |
+| `GET` | `/api/health/` | `status`, current `timestamp`, and `uptime_seconds` since the server started |
+| `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file` |
+| `GET` | `/api/servers/{id}/` | Single server with full tool detail |
+| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server and update its tools in place |
+| `GET` | `/api/files/` | All config files that were scanned: path, client, status, server IDs found, any parse errors |
+| `POST` | `/api/rescan/` | Full rediscovery — re-reads all MCP configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already in progress. |
 
 ---
 

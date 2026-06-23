@@ -1,9 +1,9 @@
 """GET /api/health, POST /api/rescan"""
 import asyncio
+import time
 
 from fastapi import APIRouter, Request
-from toolpool.core.parsers.parser import get_parser
-from toolpool import version
+from toolpool.core.parsers.parser import get_startup_time, store_discovery_sources
 
 router = APIRouter()
 
@@ -39,6 +39,7 @@ async def rescan(request: Request):
         import sys
 
         config_result = await asyncio.to_thread(_silenced, detect_all)
+        store_discovery_sources(config_result.sources)
         servers_to_probe = list(config_result.servers.values())
         tool_results = await asyncio.to_thread(_silenced, list_tools_for_all, servers_to_probe)
         manifest = build_manifest(config_result, tool_results)
@@ -62,20 +63,11 @@ async def rescan(request: Request):
 
 @router.get("/health")
 async def health():
-    parser = get_parser()
-    manifest = parser.manifest
-    warnings = parser.validate_references()
+    from datetime import datetime, timezone
+    startup = get_startup_time()
+    uptime = int(time.monotonic() - startup) if startup is not None else None
     return {
-        "status": "degraded" if warnings else "ok",
-        "toolpool": version,
-        "config": {
-            "name": manifest.metadata.name,
-            "description": manifest.metadata.description,
-            "owner": manifest.metadata.owner,
-            "updated": manifest.metadata.updated,
-            "agents": len(manifest.agents),
-            "servers": len(manifest.servers),
-            "policy_engines": len(manifest.policy_engines),
-        },
-        "warnings": warnings,
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "uptime_seconds": uptime,
     }

@@ -7,9 +7,8 @@ Technical reference for contributors. Covers architecture, data flow, design dec
 ## Contents
 
 - [Project structure](#project-structure)
-- [Two data paths, one manifest](#two-data-paths-one-manifest)
 - [Discovery pipeline](#discovery-pipeline)
-- [Parser pipeline (YAML)](#parser-pipeline-yaml)
+- [Manifest singleton](#manifest-singleton)
 - [Async architecture](#async-architecture)
 - [Data models](#data-models)
 - [API layer](#api-layer)
@@ -29,37 +28,26 @@ toolpool/
 │
 ├── api/
 │   ├── app.py               # FastAPI factory, CORS, SPA mount
-│   ├── deps.py              # FastAPI dependency: get_manifest()
 │   └── routers/
-│       ├── health.py        # GET /api/health, POST /api/rescan (full rediscovery)
-│       ├── agents.py        # GET /api/agents, /api/agents/{id}
-│       ├── servers.py       # GET /api/servers, /api/servers/{id}, POST /api/servers/{id}/rescan
-│       ├── policy.py        # GET /api/policy/matrix, /engines, /engines/{id}/raw
-│       └── analysis.py      # GET /api/conflicts, /api/orchestration
+│       ├── health.py        # GET /api/health/, POST /api/rescan/
+│       ├── servers.py       # GET /api/servers/, /api/servers/{id}/, POST /api/servers/{id}/rescan/
+│       └── files.py         # GET /api/files/
 │
 └── core/
     ├── models/
-    │   ├── manifest.py      # ToolpoolManifest — central aggregate
-    │   ├── server.py        # MCPServer, DiscoveredToolLite
-    │   ├── agent.py         # Agent, AgentServerRef, AgentOrchestration
-    │   ├── tool.py          # Tool, Permission, effective_access()
-    │   ├── policy.py        # PolicyEngine, AgentPolicy, InlinePolicyRule
-    │   └── conflict.py      # ConflictError, ConflictWarning, OrchestrationIssue
+    │   ├── manifest.py      # ToolpoolManifest, ToolpoolMetadata
+    │   └── server.py        # MCPServer, DiscoveredToolLite
     │
-    ├── parsers/             # YAML manifest pipeline
-    │   ├── parser.py        # ToolpoolParser orchestrator + module singleton
-    │   ├── loader.py        # File I/O, glob resolution, FileContents
-    │   ├── transformers.py  # raw dict → Pydantic model (pure functions)
-    │   ├── merger.py        # Conflict detection + entity merging
-    │   └── orchestration.py # Delegation graph DFS + cycle classification
+    ├── parsers/
+    │   └── parser.py        # Module-level singleton: get_parser(), init_parser_from_manifest()
     │
-    └── discovery/           # Autodiscovery pipeline
-        ├── config_detector.py   # detect_all(), _merge(), qualified IDs
+    └── discovery/
+        ├── config_detector.py   # detect_all(), qualified IDs
         ├── _paths.py            # Platform-aware path resolvers, walk_up_for()
         ├── _readers.py          # read_json(), read_claude_json(), read_codex_toml()
         ├── _parsers.py          # Dict → MCPServer, env var substitution
         ├── results.py           # DiscoverySource, ConfigDetectionResult, ToolDiscoveryResult
-        ├── mcp_client.py        # Async prober: stdio / http / sse, fallback to agent CLI
+        ├── mcp_client.py        # Async prober: stdio / http / sse, agent CLI fallback
         ├── tool_discovery.py    # Sync wrappers, list_tools_for_all(), asyncio bridge
         ├── to_manifest.py       # Discovery output → ToolpoolManifest
         ├── _docker_mcp.py       # Docker MCP profile reader (no live probe needed)
@@ -70,125 +58,81 @@ toolpool/
 
 ---
 
-## Two data paths, one manifest
-
-The central design principle: **two independent pipelines produce the same `ToolpoolManifest`**, so the API layer and UI are unaware of how the data arrived.
-
-```
-YAML path:
-  toolpool.yml + includes
-    → loader.py (file I/O)
-    → transformers.py (dict → models)
-    → merger.py (conflict detection)
-    → orchestration.py (graph analysis)
-    → ToolpoolManifest
-
-Discovery path:
-  MCP client config files
-    → config_detector.py (detect_all)
-    → mcp_client.py (live probe, async)
-    → tool_discovery.py (sync wrapper)
-    → to_manifest.py (build_manifest)
-    → ToolpoolManifest
-```
-
-Both paths terminate at `init_parser_from_manifest()` in `parser.py`, which installs the manifest into the module-level singleton. API routers call `get_parser().manifest` and receive the same object regardless of origin.
-
-The YAML path is richer (agents, policy engines, orchestration graph, conflict detection). The discovery path currently produces servers and tools only — agents are a planned Phase 2 addition (AST scanner).
-
----
-
 ## Discovery pipeline
+
+Toolpool has a single data path: autodiscovery from MCP client config files.
+
+```
+MCP client config files (.json, .toml)
+  → config_detector.py  (detect_all — reads all known config locations)
+  → mcp_client.py       (live probe each server, async)
+  → tool_discovery.py   (sync wrapper + asyncio bridge)
+  → to_manifest.py      (build_manifest → ToolpoolManifest)
+  → parser.py           (init_parser_from_manifest — installs singleton)
+  → API routers         (get_parser().manifest)
+```
 
 ### 1. Config detection (`config_detector.py`, `_paths.py`, `_readers.py`, `_parsers.py`)
 
-`detect_all()` is the entry point. It reads config files from known locations in priority order:
+`detect_all()` is the entry point. It reads config files in priority order:
 
 1. Custom paths (`--config` flag)
 2. Claude Code global (`~/.claude.json`) — special two-level format
 3. Codex project (`.codex/config.toml`, walk up from cwd)
 4. Codex global (`~/.codex/config.toml`)
-5. Claude Code project, Cursor project/global, MCP JSON project/global (all via `build_plan()`)
+5. Claude Code project, Cursor project/global, MCP JSON project/global (via `build_plan()`)
 6. Docker MCP Toolkit profiles (via `docker mcp profile ls`)
 
-**Qualified IDs** prevent cross-client collisions. Every server gets a key in the form `{client}:{server_id}`, e.g. `claude_code_user:browserbase` and `cursor_user:browserbase` are distinct entries and both survive. Project-scoped Claude Code servers use a three-part key: `claude_code_project:{md5_slug}:{server_id}`, where the slug is an MD5 hash of the project root path (avoids slashes in dict keys).
+**Qualified IDs** prevent cross-client collisions. Every server gets a key in the form `{client}:{server_id}`, e.g. `claude_code_user:browserbase` and `cursor_user:browserbase` are distinct entries and both survive. Project-scoped Claude Code servers use a three-part key: `claude_code_project:{md5_slug}:{server_id}`.
 
-**First-sighting wins** within the same client — if the same qualified ID appears twice (e.g. duplicate JSON keys in one file), the second is silently dropped. In-file duplicates are detected by passing `object_pairs_hook` to `json.loads()` and recorded in `DiscoverySource.in_file_duplicates`.
+**First-sighting wins** within the same client — in-file duplicates are detected via `object_pairs_hook` in `json.loads()` and recorded in `DiscoverySource.in_file_duplicates`.
 
-**Cross-client name collisions** are tracked in `ConfigDetectionResult._name_to_qid` (a private `{name → qualified_id}` dict). When the same server name is first seen in one client, its qualified ID is registered. Any later client contributing the same name appends to `ConfigDetectionResult.duplicates`.
+**`~/.claude.json`** has a two-level structure: user-level servers at the top, plus a `projects` dict keyed by project root path. `parse_claude_json()` separates these and marks project entries with `project_path` for qualified ID generation.
 
-**`~/.claude.json` has a two-level structure**: user-level servers at the top, plus a `projects` dict keyed by project root path — each project entry holds its own `mcpServers` block. `parse_claude_json()` separates these, applies the cwd walk-up to include only relevant project entries, and marks them with `project_path` for later use in qualified ID generation.
+**Codex uses TOML**, not JSON. `read_codex_toml()` delegates to `parse_mcp_servers()` with `key="mcp_servers"`.
 
-**Codex uses TOML**, not JSON. `read_codex_toml()` delegates to `parse_mcp_servers()` with `key="mcp_servers"` (underscore, not camelCase).
+**Docker MCP Toolkit** is read via `docker mcp profile ls --format json` — no live probing needed. Each profile becomes a `DiscoverySource`.
 
-**Docker MCP Toolkit** is read via `docker mcp profile ls --format json` which returns tool snapshots in one call — no live probing needed. Each profile becomes a `DiscoverySource` with `client="docker_mcp:{profile_name}"`.
+**Live status enrichment**: if the user grants permission, toolpool shells out to `claude mcp list` / `codex mcp list` / `cursor-agent mcp list-tools` and attaches connection status strings to the relevant servers. Skipped in `--json` / `--no-serve` mode.
 
-**Live status enrichment** (steps 7–9 in `detect_all`): if the user grants permission, toolpool shells out to `claude mcp list` / `codex mcp list` / `cursor-agent mcp list-tools` and attaches the connection status strings to the relevant servers. This is optional and skipped entirely in `--json` / `--no-serve` mode.
-
-**`_status_*.py` modules** each run a subprocess, parse the CLI output, and return a `{server_name → status_string}` dict. The detector merges those back into `result.servers` via `model_copy(update=...)`.
-
-**Env var substitution** in `_parsers.py`: `${VAR}` and `$VAR` references inside `env` and `args` fields are expanded against the process environment using a single compiled regex. Unresolved references pass through unchanged.
+**Env var substitution** in `_parsers.py`: `${VAR}` and `$VAR` references inside `env` and `args` fields are expanded against the process environment. Unresolved references pass through unchanged.
 
 ### 2. Live probing (`mcp_client.py`, `tool_discovery.py`)
 
-**`mcp_client.py`** is fully async. `probe_server()` routes by transport:
+`mcp_client.py` is fully async. `probe_server()` routes by transport:
 
-- **stdio**: spawns a subprocess via `mcp.client.stdio.stdio_client`, merges server env with `os.environ` so `PATH`/`HOME` survive, then runs the MCP initialize handshake and `tools/list`.
+- **stdio**: spawns a subprocess via `mcp.client.stdio.stdio_client`, merges server env with `os.environ`, runs MCP initialize + `tools/list`.
 - **http**: connects via `mcp.client.streamable_http.streamable_http_client`.
 - **sse**: connects via `mcp.client.sse.sse_client`.
 
-For Cursor-sourced HTTP/SSE servers that reject the native probe (e.g. missing auth), there is an automatic **agent CLI fallback**: `cursor-agent mcp list-tools <server_name>`. The fallback mechanism is extensible — `_AGENT_FALLBACK_CMDS` maps client name prefixes to their CLI commands, so adding a new client fallback is one dict entry. Claude Code and Codex are pre-stubbed but commented pending CLI confirmation.
+For Cursor-sourced HTTP/SSE servers that reject the native probe, there is an automatic **agent CLI fallback**: `cursor-agent mcp list-tools <server_name>`. The fallback is extensible via `_AGENT_FALLBACK_CMDS`.
 
-Every failure mode (timeout, missing command, protocol error, missing SDK) is caught and returned as a `ToolDiscoveryResult` with the appropriate `ToolDiscoveryStatus` enum value. `probe_server()` never raises to the caller.
+A `FileNotFoundError` on the server command returns a `connection_failed` result with a human-readable install hint (e.g. `'uvx' is not installed — install uv: https://astral.sh/uv`).
 
-`probe_all()` uses `asyncio.gather()` with a `Semaphore` to bound concurrency (default 8, configurable via `--concurrency`). Results are returned in the same order as the input server list.
+`probe_all()` runs probes concurrently under a `Semaphore` (default 8, configurable via `--concurrency`).
 
-**`tool_discovery.py`** is the sync surface. `list_tools_for_all()` runs the async `probe_all()` on a fresh event loop using a custom `_run()` helper that detects an already-running loop and raises a clear error rather than hanging or crashing silently. It also short-circuits Docker MCP servers (which have `discovered_tools` pre-populated from profile snapshots) and emits synthetic `FOUND` results for them so downstream code stays uniform.
+`tool_discovery.py` is the sync surface. `list_tools_for_all()` runs `probe_all()` on a fresh event loop. It short-circuits Docker MCP servers (pre-populated from profile snapshots) and emits synthetic `FOUND` results so downstream code stays uniform.
 
 ### 3. Manifest assembly (`to_manifest.py`)
 
-`build_manifest()` attaches `ToolDiscoveryResult` data to each `MCPServer` as a list of `DiscoveredToolLite`, and also stores `probe_status` (`result.status.value`) and `probe_error` (`result.error`) directly on the `MCPServer`. These two fields are the authoritative probe outcome — the UI uses `probe_status` as its primary signal for failure badges and status colours, falling back to `connection_status` only when `probe_status` is absent. The `agents` dict is empty in Phase 1. The result has the same shape as a YAML-parsed manifest, so `init_parser_from_manifest()` and the API routers require no changes.
+`build_manifest()` attaches each `ToolDiscoveryResult` to its `MCPServer` as `discovered_tools`, `probe_status`, and `probe_error`. `probe_status` is the canonical failure signal used by the UI — it takes precedence over `connection_status`, which is a secondary signal from optional agent CLI enrichment.
 
 ---
 
-## Parser pipeline (YAML)
+## Manifest singleton
 
-The YAML pipeline is split into strict single-responsibility modules with no cross-dependencies between them.
+`parser.py` is now a thin module holding four module-level values and the functions to access them:
 
-### `loader.py`
+| Name | Type | Purpose |
+|---|---|---|
+| `_parser` | `ToolpoolParser` | Wraps the active `ToolpoolManifest` |
+| `_last_scanned` | `str` (ISO-8601 UTC) | Timestamp of the last manifest install; returned in `GET /api/servers/` |
+| `_startup_time` | `float` (`time.monotonic()`) | Set once at first install; drives `uptime_seconds` in `GET /api/health/` |
+| `_discovery_sources` | `list[DiscoverySource]` | From the last `detect_all()`; served by `GET /api/files/` |
 
-Pure file I/O. `read_yaml()` reads one file. `load_all_included_files()` expands glob patterns relative to the root manifest directory, loads each matched file, and enforces hard schema rules on included files: no nested `include:` keys, no `policy_engines:` or `metadata:` blocks, agents/servers must use dict format (not list). Returns a `list[FileContents]`.
+`init_parser_from_manifest(manifest)` installs the manifest and updates `_last_scanned` and `_startup_time` (first install only). It is called at CLI startup and after every `POST /api/rescan/`.
 
-### `transformers.py`
-
-Pure conversion functions. One function per model: `parse_agent()`, `parse_server()`, `parse_tool()`, `parse_policy_engine()`, etc. Input is a raw `dict`; output is a Pydantic model. No I/O, no merge logic, no side effects.
-
-### `merger.py`
-
-Two-pass conflict detection and merging:
-
-1. **Included-vs-included scan**: find IDs claimed by more than one included file → `ConflictError`. Neither entity is rendered.
-2. **Root-vs-included merge**: for each remaining entity, root definition wins over included-file definition → `ConflictWarning` on collision. Entities with no conflict are merged cleanly.
-
-The conflict classification maps directly to distinct UI indicators (❌ vs ⚠).
-
-### `orchestration.py`
-
-DFS over the agent delegation graph (`can_delegate_to` edges). Cycle detection uses a standard `visited`/`path` stack. Each detected cycle is classified:
-
-- **`circular`**: two-hop loop (`A → B → A`) where the back-edge is not declared in `receives_from`.
-- **`bidirectional`**: two-hop loop where `receives_from` covers every back-edge — intentional, but still flagged.
-- **`cycle`**: multi-hop loop (`A → B → C → A`).
-
-`frozenset` deduplication prevents the same cycle from being reported multiple times (once per starting node). Conflicted agents are excluded from analysis.
-
-### `parser.py`
-
-Orchestrates all four modules and manages the **module-level singleton**. The singleton pattern (`get_parser()` / `init_parser()`) avoids threading overhead — all API request handlers share one manifest object rather than reloading YAML per request.
-
-`_build()` assembles the final `ToolpoolManifest` in a **single pass** over all agents after merging: it simultaneously computes `all_tools`, `agent_tool_index` (`agent_id → {tool_name → Tool}`), and `server_agents_index` (`server_id → [{id, name}]`). These precomputed indexes make the API router's O(1) lookups possible at request time.
-
-`init_parser_from_manifest()` bypasses YAML loading entirely and installs a pre-built manifest (from the discovery path) into the singleton. The installed parser has no `config_path` — `reload()` would fail, which is intentional since discovery manifests are refreshed by re-running the command, not by file watching.
+`get_parser().manifest` is the read path used by all API routers.
 
 ---
 
@@ -196,9 +140,7 @@ Orchestrates all four modules and manages the **module-level singleton**. The si
 
 The codebase is **sync at the surface, async only where it matters**.
 
-The CLI, parsers, and API request handlers are all sync. The only async code is in `mcp_client.py`, which performs I/O-bound operations (subprocess spawning, network connections). This keeps the codebase simple — no `async def` leakage into unrelated layers.
-
-The sync↔async boundary is managed by `tool_discovery._run()`:
+The CLI and API request handlers are sync. The only async code is in `mcp_client.py` (I/O-bound: subprocess spawning, network connections).
 
 ```
 sync caller (cli.py)
@@ -208,39 +150,42 @@ sync caller (cli.py)
         → probe_server()        (mcp_client.py, async)
 ```
 
-`asyncio.run()` is preferred over manually creating and closing an event loop because it handles cleanup (cancelling pending tasks) correctly. The running-loop check in `_run()` handles embedded contexts (pytest-anyio, Jupyter) where `asyncio.run()` would raise.
+FastAPI's uvicorn event loop is completely separate. API-triggered rescans use `asyncio.to_thread()` to run the blocking discovery pipeline without stalling the event loop:
 
-FastAPI's own event loop (used by uvicorn) is completely separate from the CLI probing loop. The sync API handlers never block the event loop — the single-server `POST /api/servers/{id}/rescan` endpoint uses `asyncio.to_thread()` to run the sync `list_tools_for` call in the thread pool, keeping the uvicorn event loop free. The full `POST /api/rescan` runs the blocking discovery pipeline similarly via `asyncio.to_thread()`, guarded by an `asyncio.Lock` so concurrent requests don't stack up.
+- `POST /api/servers/{id}/rescan/` — `asyncio.to_thread(list_tools_for, server)`
+- `POST /api/rescan/` — `asyncio.to_thread(_silenced, detect_all)` then `asyncio.to_thread(_silenced, list_tools_for_all, ...)`, guarded by `asyncio.Lock`
 
 ---
 
 ## Data models
 
-All models are Pydantic v2 `BaseModel` subclasses. No SQLAlchemy, no ORM — the manifest is an in-memory object graph rebuilt on each load.
+All models are Pydantic v2 `BaseModel` subclasses.
 
 ### `ToolpoolManifest` (`manifest.py`)
 
-The central aggregate. Contains:
-
-- `servers`, `agents`, `policy_engines` — dicts keyed by ID
-- `conflict_errors`, `conflict_warnings`, `orchestration_issues` — populated by the YAML pipeline; empty for discovery-built manifests
-- `agent_tool_index` — `dict[agent_id, dict[tool_name, Tool]]` for O(1) per-tool access lookup (used by the policy matrix router)
-- `server_agents_index` — `dict[server_id, list[{id, name}]]` for O(1) agent-by-server lookup
-- `_conflicted_*` / `_warned_*` — private `set[str]` caches for O(1) conflict-status checks
-
-Private fields on a Pydantic model use underscore prefix and are set directly after construction (not via `__init__`) since they're not part of the schema.
+| Field | Type | Description |
+|---|---|---|
+| `metadata` | `ToolpoolMetadata` | Name and optional description |
+| `servers` | `dict[str, MCPServer]` | Keyed by qualified ID (`{client}:{server_id}`) |
+| `all_tools` | `list[str]` | Sorted unique tool names across all servers |
+| `server_agents_index` | `dict[str, list[dict]]` | Reserved for future agent discovery |
 
 ### `MCPServer` (`server.py`)
 
-Holds transport config (`command`/`args`/`env` for stdio, `url` for http/sse) plus runtime-populated fields: `discovered_tools` (from probing), `client` (which config source it came from), `source_path`, `connection_status`, `probe_status`, and `probe_error`. `probe_status` is the raw `ToolDiscoveryStatus.value` string (`"found"` / `"connection_failed"` / etc.); `probe_error` is the human-readable failure message. `connection_status` comes from optional agent CLI enrichment (`claude mcp list` etc.) and is a secondary signal — present only when the enrichment step runs and the client responded. The split between declaration fields and runtime fields is intentional — YAML-only manifests have empty `discovered_tools`; discovery-only manifests have empty agent-related fields.
+Holds transport config (`command`/`args`/`env` for stdio, `url` for http/sse) plus runtime fields:
 
-### `Tool` (`tool.py`)
-
-Agent-specific view of a tool. `effective_access()` computes a four-state summary (`allowed` / `denied` / `partial` / `unknown`) from the `permissions` list. `partial` means some operations are allowed and some denied — surfaced as a distinct colour in the permission matrix.
+| Field | Description |
+|---|---|
+| `discovered_tools` | `list[DiscoveredToolLite]` — populated by live probing |
+| `client` | Which config source (`claude_code_user`, `cursor_project`, etc.) |
+| `source_path` | Absolute path of the config file this server was read from |
+| `probe_status` | `"found"` / `"connection_failed"` / `"timeout"` / etc. — canonical UI signal |
+| `probe_error` | Human-readable error from the last failed probe |
+| `connection_status` | Secondary signal from optional agent CLI enrichment |
 
 ### `DiscoveredToolLite` (`server.py`)
 
-Lightweight tool record produced by live probing. Distinct from `Tool` — it carries no agent-specific access metadata, just name, description, and input schema. The distinction keeps probed data neutral until it's joined to an agent context.
+Lightweight tool record from live probing: `name`, `description`, `input_schema`. No agent-specific metadata.
 
 ---
 
@@ -248,36 +193,26 @@ Lightweight tool record produced by live probing. Distinct from `Tool` — it ca
 
 ### `app.py`
 
-`create_app()` is a factory, not a module-level singleton, which makes it testable (each call returns a fresh `FastAPI` instance). In production, the React SPA is served by FastAPI's `StaticFiles` mount directly from `ui/dist/`. In development, Vite runs separately and proxies `/api` to FastAPI.
-
-OpenAPI docs (`/api/docs`, `/api/redoc`) are only exposed when `settings.debug = True`.
-
-### `deps.py`
-
-Provides the `get_manifest()` FastAPI dependency, which calls `get_parser().manifest`. All routers receive the manifest via dependency injection rather than importing the singleton directly — this makes the dependency swappable in tests.
+`create_app()` is a factory (not a module-level singleton) so each call returns a fresh `FastAPI` instance. The React SPA is served via `StaticFiles` from `ui/dist/`. OpenAPI docs are only exposed when `settings.debug = True`.
 
 ### Routers
 
-All routers are read-only. No endpoint mutates the manifest. Response shapes are built inline from the manifest — no separate serialisation layer.
+**`servers.py`**: `list_servers` returns all MCP servers with `tool_count`, `source_file`, `total_servers`, `total_tools`. `get_server` looks up a single server by qualified ID. `rescan_server` re-probes a single server via `asyncio.to_thread()` and updates the in-memory manifest entry.
 
-**`agents.py`**: `list_agents` precomputes an `orch_index` (`agent_id → [issues]`) before iterating agents, avoiding O(agents × orchestration_issues) inner-loop scanning. `get_agent` resolves server references by name using `manifest.get_server()`.
+**`files.py`**: Returns `_discovery_sources` — the list of every config file checked, with path, client, status, server IDs found, and any parse error.
 
-**`policy.py`**: `policy_matrix` iterates `manifest.agents × manifest.all_tools` and uses `manifest.agent_tool_access(agent_id, tool_name)` (backed by `agent_tool_index`) for O(1) per-cell lookup. Without the index, a naive scan would be O(agents × servers × tools) per request.
+**`health.py`**: `GET /api/health/` returns `status`, `timestamp`, `uptime_seconds`. Hosts `POST /api/rescan/` with two safety mechanisms:
 
-**`analysis.py`**: `orchestration_overview` returns the full delegation edge list plus issues. Uses `itertools.groupby` on issues sorted by type to produce per-type counts.
+- **`_rescan_lock` (`asyncio.Lock`)** — returns `{"status": "already_scanning"}` immediately if a rescan is in progress; no caller waits.
+- **`_silenced(fn)`** — redirects fd 1+2 to `/dev/null` during `detect_all()` and `list_tools_for_all()` to suppress subprocess noise. Safe because only one rescan runs at a time under the lock.
 
-**`health.py`**: Hosts `POST /api/rescan` — the full rediscovery endpoint. Two safety mechanisms:
-
-- **`_rescan_lock` (`asyncio.Lock`)**: If a rescan is already in progress, the endpoint returns `{"status": "already_scanning"}` immediately rather than queueing a second concurrent run. Lock acquisition is non-blocking (`locked()` check only) — no caller ever waits.
-- **`_silenced(fn, *args)`**: A context that redirects fd 1 and 2 to `/dev/null` for the duration of a call. Used to suppress subprocess noise during `detect_all()` and `list_tools_for_all()` (which can write to stdout/stderr) without affecting the structured terminal output that follows. This is the same fd-level approach used at CLI startup. It is safe under the lock because only one rescan runs at a time.
-
-All subprocess calls in `_status_*.py` pass `stdin=subprocess.DEVNULL` to prevent interactive permission prompts (from Claude Code's auth system) from inheriting the terminal's stdin and blocking the request for up to 15 seconds.
+All `_status_*.py` subprocess calls pass `stdin=subprocess.DEVNULL` to prevent Claude Code's auth prompts from inheriting the terminal stdin and blocking for up to 15 seconds.
 
 ---
 
 ## Version management
 
-**Single source of truth: `pyproject.toml`.**
+Single source of truth: `pyproject.toml`.
 
 ```
 pyproject.toml          version = "0.1.0"
@@ -290,44 +225,36 @@ cli.py                  --version flag, startup banner
 api/app.py              FastAPI app version field
 ```
 
-`toolpool/__init__.py` uses `importlib.metadata.version()` with a `PackageNotFoundError` fallback to `"unknown"` for uninstalled dev runs. To bump the version, change `version =` in `pyproject.toml` and reinstall (`pip install -e .`). Nothing else needs updating.
+To bump: change `version =` in `pyproject.toml` and reinstall (`pip install -e .`). Nothing else needs updating.
 
 ---
 
 ## Adding a new MCP client
-
-To add support for a new client (e.g. Windsurf, Zed):
 
 **1. Add path resolvers** in `_paths.py`:
 
 ```python
 def windsurf_user_path() -> Path:
     return Path.home() / ".windsurf" / "mcp.json"
-
-def windsurf_project_path(cwd: Path) -> Optional[Path]:
-    return walk_up_for(cwd, (".windsurf", "mcp.json"))
 ```
 
-Add the new client IDs to `CLIENT_PRIORITY` in the desired deduplication order.
+Add the new client ID to `CLIENT_PRIORITY` in the desired deduplication order.
 
-**2. Register in `build_plan()`** in `_paths.py`:
+**2. Register in `build_plan()`**:
 
 ```python
-("windsurf_project", lambda: windsurf_project_path(cwd)),
-("windsurf_user",    windsurf_user_path),
+("windsurf_user", windsurf_user_path),
 ```
 
-**3. Add a status enrichment module** (optional) if the client has a CLI tool:
+**3. Add a status enrichment module** (optional) — follow the pattern of `_status_cursor.py` and add a call site in `detect_all()`.
 
-Create `_status_windsurf.py` following the pattern of `_status_cursor.py`. Add a permission prompt and call site in `detect_all()` in `config_detector.py`.
-
-**4. Add an agent CLI fallback** (optional) in `mcp_client.py` if the client can list tools on behalf of auth-protected servers:
+**4. Add an agent CLI fallback** (optional) in `mcp_client.py`:
 
 ```python
-_AGENT_FALLBACK_CMDS: dict[str, list[str]] = {
-    "cursor":    ["cursor-agent", "mcp", "list-tools"],
-    "windsurf":  ["windsurf",     "mcp", "list-tools"],   # ← add here
+_AGENT_FALLBACK_CMDS = {
+    "cursor":   ["cursor-agent", "mcp", "list-tools"],
+    "windsurf": ["windsurf",     "mcp", "list-tools"],
 }
 ```
 
-The config parser (`_readers.py`, `_parsers.py`) requires no changes if the new client uses the standard `{"mcpServers": {...}}` JSON format. Only non-standard formats (like Codex's TOML or Claude Code's two-level `~/.claude.json`) need custom readers.
+No changes needed to `_readers.py` or `_parsers.py` if the client uses the standard `{"mcpServers": {...}}` JSON format.

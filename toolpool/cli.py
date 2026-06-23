@@ -61,7 +61,7 @@ def _find_free_port(start: int, host: str) -> int:
 from toolpool import __version__
 from toolpool.core.discovery import detect_all, list_tools_for_all
 from toolpool.core.discovery.to_manifest import build_manifest
-from toolpool.core.parsers.parser import init_parser_from_manifest
+from toolpool.core.parsers.parser import init_parser_from_manifest, store_discovery_sources
 from toolpool.api.app import create_app
 from toolpool._cli_output import print_summary, result_as_json
 
@@ -328,6 +328,7 @@ def run(
     if actual_port != port:
         typer.echo(f"\n  Port {port} in use — using {actual_port} instead.")
 
+    store_discovery_sources(config_result.sources)
     manifest = build_manifest(config_result, tool_results)
     init_parser_from_manifest(manifest)
 
