@@ -144,7 +144,7 @@ def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServe
         raw = (spec.get("type") or spec.get("transport") or "").lower().replace("-", "_")
         transport = "sse" if raw == "sse" else "http"
     else:
-        raise ValueError("server has neither `command` nor `url`")
+        raise ValueError("Server has neither `command` nor `url`")
 
     headers_raw = dict(spec.get("headers") or {})
 
