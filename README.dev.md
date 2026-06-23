@@ -215,11 +215,11 @@ All `_status_*.py` subprocess calls pass `stdin=subprocess.DEVNULL` to prevent C
 Single source of truth: `pyproject.toml`.
 
 ```
-pyproject.toml          version = "0.1.0"
+pyproject.toml          version = "0.1.1"
     ↓ (hatchling reads at build time)
 installed package metadata
     ↓ (importlib.metadata.version("tooldex") at runtime)
-tooldex.__version__    "0.1.0"
+tooldex.__version__    "0.1.1"
     ↓
 cli.py                  --version flag, startup banner
 api/app.py              FastAPI app version field
