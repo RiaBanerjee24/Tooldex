@@ -1,12 +1,12 @@
-"""Unit tests for toolpool/api/routers/servers.py."""
+"""Unit tests for tooldex/api/routers/servers.py."""
 import pytest
 from fastapi.testclient import TestClient
 
-from toolpool.api.app import create_app
-from toolpool.api.routers.servers import _friendly_path, _is_sensitive_env, _redact_server
-from toolpool.core.models.manifest import ToolpoolManifest, ToolpoolMetadata
-from toolpool.core.models.server import DiscoveredToolLite, MCPServer
-from toolpool.core.parsers.parser import init_parser_from_manifest
+from tooldex.api.app import create_app
+from tooldex.api.routers.servers import _friendly_path, _is_sensitive_env, _redact_server
+from tooldex.core.models.manifest import TooldexManifest, TooldexMetadata
+from tooldex.core.models.server import DiscoveredToolLite, MCPServer
+from tooldex.core.parsers.parser import init_parser_from_manifest
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def client():
 
 
 def _install_manifest(servers: dict[str, MCPServer]):
-    manifest = ToolpoolManifest(metadata=ToolpoolMetadata(name="Test"), servers=servers)
+    manifest = TooldexManifest(metadata=TooldexMetadata(name="Test"), servers=servers)
     init_parser_from_manifest(manifest)
     return manifest
 

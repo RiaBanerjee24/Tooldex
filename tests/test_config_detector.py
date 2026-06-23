@@ -1,11 +1,11 @@
-"""Unit tests for toolpool/core/discovery/config_detector.py."""
+"""Unit tests for tooldex/core/discovery/config_detector.py."""
 import json
 
 import pytest
 
-from toolpool.core.discovery.config_detector import _merge, _project_slug, detect_all
-from toolpool.core.discovery.results import ConfigDetectionResult, DiscoverySource, SourceStatus
-from toolpool.core.models.server import MCPServer
+from tooldex.core.discovery.config_detector import _merge, _project_slug, detect_all
+from tooldex.core.discovery.results import ConfigDetectionResult, DiscoverySource, SourceStatus
+from tooldex.core.models.server import MCPServer
 
 
 class TestProjectSlug:

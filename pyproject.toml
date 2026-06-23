@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "toolpool"
+name = "tooldex"
 version = "0.1.0"
 description = "AI Agent Permission Observatory"
 readme = "README.md"
@@ -29,10 +29,10 @@ test = [
 ]
 
 [project.scripts]
-toolpool = "toolpool.cli:main"
+tooldex = "tooldex.cli:main"
 
 [tool.hatch.build.targets.wheel]
-include = ["toolpool/**"]
+include = ["tooldex/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

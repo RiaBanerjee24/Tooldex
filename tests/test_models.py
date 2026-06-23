@@ -1,9 +1,9 @@
-"""Unit tests for toolpool/core/models/server.py and manifest.py."""
+"""Unit tests for tooldex/core/models/server.py and manifest.py."""
 import pytest
 from pydantic import ValidationError
 
-from toolpool.core.models.manifest import ToolpoolManifest, ToolpoolMetadata
-from toolpool.core.models.server import DiscoveredToolLite, MCPServer
+from tooldex.core.models.manifest import TooldexManifest, TooldexMetadata
+from tooldex.core.models.server import DiscoveredToolLite, MCPServer
 
 
 class TestMCPServer:
@@ -51,21 +51,21 @@ class TestDiscoveredToolLite:
         assert t.input_schema is None
 
 
-class TestToolpoolManifest:
+class TestTooldexManifest:
     def test_get_server_found(self):
         server = MCPServer(id="a:fs", name="fs")
-        manifest = ToolpoolManifest(
-            metadata=ToolpoolMetadata(name="Test"),
+        manifest = TooldexManifest(
+            metadata=TooldexMetadata(name="Test"),
             servers={"a:fs": server},
         )
         assert manifest.get_server("a:fs") is server
 
     def test_get_server_missing_returns_none(self):
-        manifest = ToolpoolManifest(metadata=ToolpoolMetadata(name="Test"))
+        manifest = TooldexManifest(metadata=TooldexMetadata(name="Test"))
         assert manifest.get_server("nope") is None
 
     def test_defaults(self):
-        manifest = ToolpoolManifest(metadata=ToolpoolMetadata(name="Test"))
+        manifest = TooldexManifest(metadata=TooldexMetadata(name="Test"))
         assert manifest.servers == {}
         assert manifest.all_tools == []
         assert manifest.server_agents_index == {}

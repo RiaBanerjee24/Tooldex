@@ -23,7 +23,7 @@ ENV/
 
 # Node
 node_modules/
-toolpool/ui/node_modules/
+tooldex/ui/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

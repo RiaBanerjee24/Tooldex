@@ -1,4 +1,4 @@
-# Contributing to Toolpool
+# Contributing to Tooldex
 
 Thanks for taking the time to contribute. This guide covers how to set up the project, the expected workflow, and what to include in a pull request.
 
@@ -21,15 +21,15 @@ Thanks for taking the time to contribute. This guide covers how to set up the pr
 1. Fork the repository and clone your fork:
 
    ```bash
-   git clone https://github.com/<your-username>/Toolpool.git
-   cd Toolpool
+   git clone https://github.com/<your-username>/Tooldex.git
+   cd Tooldex
    ```
 
 2. Install in editable mode:
 
    ```bash
    pip install -e .
-   toolpool --version
+   tooldex --version
    ```
 
 3. Read [`README.dev.md`](README.dev.md) for an overview of the project structure and architecture before making non-trivial changes.
@@ -63,7 +63,7 @@ Thanks for taking the time to contribute. This guide covers how to set up the pr
 
 ## Testing
 
-Toolpool has a `pytest` unit-test suite under `tests/`, covering config parsing, path resolution, discovery merging, manifest building, the parser singleton, and the API routers. **All tests must pass before a PR can be merged** — the same suite runs in CI (see [`.github/workflows/tests.yml`](.github/workflows/tests.yml)) against Python 3.10–3.12.
+Tooldex has a `pytest` unit-test suite under `tests/`, covering config parsing, path resolution, discovery merging, manifest building, the parser singleton, and the API routers. **All tests must pass before a PR can be merged** — the same suite runs in CI (see [`.github/workflows/tests.yml`](.github/workflows/tests.yml)) against Python 3.10–3.12.
 
 Install test dependencies and run the suite:
 
@@ -79,19 +79,19 @@ pytest tests/test_parsers.py
 pytest tests/test_parsers.py::TestParseMcpServers::test_parses_stdio_server -v
 ```
 
-If you add or change behavior in `toolpool/core/` or `toolpool/api/`, add or update the corresponding test file in `tests/` as part of your PR — a PR that changes logic without matching test coverage will be asked to add it.
+If you add or change behavior in `tooldex/core/` or `tooldex/api/`, add or update the corresponding test file in `tests/` as part of your PR — a PR that changes logic without matching test coverage will be asked to add it.
 
 For manual, end-to-end checks against your own MCP config:
 
 ```bash
 # Verify discovery against your local MCP config
-toolpool run --no-serve
+tooldex run --no-serve
 
 # Inspect the raw discovery payload
-toolpool run --json | jq .
+tooldex run --json | jq .
 
 # Confirm the API server starts and responds
-toolpool run
+tooldex run
 curl http://127.0.0.1:8282/api/health/
 ```
 
@@ -114,11 +114,11 @@ Keep PRs scoped to a single concern — smaller PRs are easier to review and mer
 
 Open a GitHub issue with:
 
-- Toolpool version (`toolpool --version`)
+- Tooldex version (`tooldex --version`)
 - Python version and OS
 - The MCP client(s) and config involved
 - Steps to reproduce, expected behavior, and actual behavior
-- Relevant output from `toolpool run --json` or server logs, with secrets redacted
+- Relevant output from `tooldex run --json` or server logs, with secrets redacted
 
 ---
 

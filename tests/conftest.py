@@ -1,7 +1,7 @@
-"""Shared fixtures for the toolpool test suite."""
+"""Shared fixtures for the tooldex test suite."""
 import pytest
 
-import toolpool.core.parsers.parser as parser_module
+import tooldex.core.parsers.parser as parser_module
 
 
 @pytest.fixture(autouse=True)

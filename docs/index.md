@@ -1,6 +1,6 @@
-# Toolpool
+# Tooldex
 
-Toolpool autodiscovers MCP servers configured across your AI clients - Claude Code, Cursor, Codex, Docker MCP Toolkit, and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+Tooldex autodiscovers MCP servers configured across your AI clients - Claude Code, Cursor, Codex, Docker MCP Toolkit, and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
 
 ---
 
@@ -14,13 +14,13 @@ Toolpool autodiscovers MCP servers configured across your AI clients - Claude Co
 ## Installation
 
 ```bash
-pip install toolpool
+pip install tooldex
 ```
 
 Verify:
 
 ```bash
-toolpool --version
+tooldex --version
 ```
 
 ---
@@ -29,14 +29,14 @@ toolpool --version
 
 ```bash
 cd your-project
-toolpool run
+tooldex run
 ```
 
-Toolpool scans config files, probes each discovered server for its tool surface, and opens the UI. The startup banner shows where to connect:
+Tooldex scans config files, probes each discovered server for its tool surface, and opens the UI. The startup banner shows where to connect:
 
 ```
   ╔══════════════════════════════════════════════════╗
-  ║         toolpool  v0.1.0                         ║
+  ║         tooldex  v0.1.0                         ║
   ╠══════════════════════════════════════════════════╣
   ║  Servers  12                                     ║
   ║  Tools    187                                    ║
@@ -48,18 +48,18 @@ Toolpool scans config files, probes each discovered server for its tool surface,
 To see the discovery summary without starting the server:
 
 ```bash
-toolpool run --no-serve
+tooldex run --no-serve
 ```
 
 ---
 
 ## How Discovery Works
 
-When you run `toolpool run`, the following happens in order:
+When you run `tooldex run`, the following happens in order:
 
-1. **Config scan** — Toolpool reads every known MCP config location for the current directory. Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
+1. **Config scan** — Tooldex reads every known MCP config location for the current directory. Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
 
-2. **Live probe** — Each discovered server is contacted concurrently. Toolpool calls `tools/list` on it and records which tools it exposes, and any errors.
+2. **Live probe** — Each discovered server is contacted concurrently. Tooldex calls `tools/list` on it and records which tools it exposes, and any errors.
 
 3. **Deduplication** — If the same server name appears in multiple clients (e.g., `browserbase` in both Claude Code and Cursor), both are retained as separate entries under their respective clients.
 
@@ -69,7 +69,7 @@ When you run `toolpool run`, the following happens in order:
 
 ## Config File Locations
 
-Toolpool checks all of the following on every run. Files that do not exist are skipped silently.
+Tooldex checks all of the following on every run. Files that do not exist are skipped silently.
 
 ### Claude Code
 
@@ -102,7 +102,7 @@ Toolpool checks all of the following on every run. Files that do not exist are s
 
 ### Docker MCP Toolkit
 
-Toolpool reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
+Tooldex reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
 
 Project-scoped paths are discovered by walking up the directory tree from `cwd` until the home directory.
 
@@ -110,7 +110,7 @@ Project-scoped paths are discovered by walking up the directory tree from `cwd` 
 
 ## MCP Config Format
 
-All JSON-based clients use the same `mcpServers` structure. Toolpool understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
+All JSON-based clients use the same `mcpServers` structure. Tooldex understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
 
 ### stdio server
 
@@ -157,7 +157,7 @@ type = "http"
 url = "https://api.githubcopilot.com/mcp/"
 ```
 
-### What Toolpool Detects
+### What Tooldex Detects
 
 For each config file found:
 
@@ -181,7 +181,7 @@ For each server probed:
 ## CLI Reference
 
 ```
-toolpool [OPTIONS] COMMAND [ARGS]
+tooldex [OPTIONS] COMMAND [ARGS]
 ```
 
 ### Global options
@@ -191,7 +191,7 @@ toolpool [OPTIONS] COMMAND [ARGS]
 | `--version`, `-V` | Print version and exit |
 | `--help`, `-h` | Show help |
 
-### `toolpool run`
+### `tooldex run`
 
 | Flag | Default | Description |
 |---|---|---|
@@ -208,26 +208,26 @@ toolpool [OPTIONS] COMMAND [ARGS]
 
 ```bash
 # Discover and launch UI
-toolpool run
+tooldex run
 
 # Custom port and host
-toolpool run --port 9000 --host 0.0.0.0
+tooldex run --port 9000 --host 0.0.0.0
 
 # Just print what was found, don't start the server
-toolpool run --no-serve
+tooldex run --no-serve
 
 # Skip slow or broken servers during probing
-toolpool run --no-probe node-api-docs --no-probe local-mcp
+tooldex run --no-probe node-api-docs --no-probe local-mcp
 
 # Pipe the discovery result into jq
-toolpool run --json | jq '.duplicates'
+tooldex run --json | jq '.duplicates'
 ```
 
 ---
 
 ## JSON Output
 
-`toolpool run --json` prints a single JSON object to stdout and exits. No servers are probed.
+`tooldex run --json` prints a single JSON object to stdout and exits. No servers are probed.
 
 ```json
 {
@@ -276,7 +276,7 @@ When the server is running (default `http://127.0.0.1:8282`). All endpoints resp
 ### Project Structure
 
 ```
-toolpool/
+tooldex/
 ├── __init__.py              # __version__ via importlib.metadata
 ├── cli.py                   # Typer CLI — run command, flags, startup
 ├── _cli_output.py           # print_banner(), print_summary(), result_as_json()
@@ -291,7 +291,7 @@ toolpool/
 │
 └── core/
     ├── models/
-    │   ├── manifest.py      # ToolpoolManifest, ToolpoolMetadata
+    │   ├── manifest.py      # TooldexManifest, TooldexMetadata
     │   └── server.py        # MCPServer, DiscoveredToolLite
     │
     ├── parsers/
@@ -305,7 +305,7 @@ toolpool/
         ├── results.py           # DiscoverySource, ToolDiscoveryResult
         ├── mcp_client.py        # Async prober: stdio / http / sse
         ├── tool_discovery.py    # Sync wrappers, asyncio bridge
-        ├── to_manifest.py       # Discovery output → ToolpoolManifest
+        ├── to_manifest.py       # Discovery output → TooldexManifest
         ├── _docker_mcp.py       # Docker MCP profile reader
         ├── _status_claude.py    # Enrich via `claude mcp list`
         ├── _status_codex.py     # Enrich via `codex mcp list`
@@ -361,4 +361,4 @@ No changes needed to `_readers.py` or `_parsers.py` if the client uses the stand
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](https://github.com/RiaBanerjee24/Toolpool/blob/main/CONTRIBUTING.md) on GitHub for setup instructions, the development workflow, and pull request guidelines.
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/RiaBanerjee24/Tooldex/blob/main/CONTRIBUTING.md) on GitHub for setup instructions, the development workflow, and pull request guidelines.
