@@ -1,5 +1,5 @@
-"""Unit tests for toolpool/core/discovery/results.py."""
-from toolpool.core.discovery.results import (
+"""Unit tests for tooldex/core/discovery/results.py."""
+from tooldex.core.discovery.results import (
     ConfigDetectionResult,
     DiscoveredTool,
     DiscoverySource,
@@ -7,7 +7,7 @@ from toolpool.core.discovery.results import (
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from toolpool.core.models.server import MCPServer
+from tooldex.core.models.server import MCPServer
 
 
 class TestToolDiscoveryResult:

@@ -1,9 +1,9 @@
-"""Unit tests for toolpool/core/discovery/_paths.py."""
+"""Unit tests for tooldex/core/discovery/_paths.py."""
 from pathlib import Path
 
 import pytest
 
-from toolpool.core.discovery._paths import (
+from tooldex.core.discovery._paths import (
     build_plan,
     claude_code_project_path,
     codex_project_path,

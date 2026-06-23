@@ -1,6 +1,6 @@
-# Toolpool
+# Tooldex
 
-Toolpool autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
 
 ---
 
@@ -30,13 +30,13 @@ Toolpool autodiscovers MCP servers configured across your AI clients — Claude 
 ## Installation
 
 ```bash
-pip install toolpool
+pip install tooldex
 ```
 
 Verify:
 
 ```bash
-toolpool --version
+tooldex --version
 ```
 
 ---
@@ -45,14 +45,14 @@ toolpool --version
 
 ```bash
 cd your-project
-toolpool run
+tooldex run
 ```
 
-Toolpool scans config files, probes each discovered server for its tool surface, and opens the UI. The startup banner shows where to connect:
+Tooldex scans config files, probes each discovered server for its tool surface, and opens the UI. The startup banner shows where to connect:
 
 ```
   ╔══════════════════════════════════════════════════╗
-  ║         toolpool  v0.1.0                         ║
+  ║         tooldex  v0.1.0                         ║
   ╠══════════════════════════════════════════════════╣
   ║  Servers  12                                     ║
   ║  Tools    187                                    ║
@@ -64,18 +64,18 @@ Toolpool scans config files, probes each discovered server for its tool surface,
 To see the discovery summary without starting the server:
 
 ```bash
-toolpool run --no-serve
+tooldex run --no-serve
 ```
 
 ---
 
 ## How discovery works
 
-When you run `toolpool run`, the following happens in order:
+When you run `tooldex run`, the following happens in order:
 
-1. **Config scan** — Toolpool reads every known MCP config location for the current directory (see [Config file locations](#config-file-locations)). Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
+1. **Config scan** — Tooldex reads every known MCP config location for the current directory (see [Config file locations](#config-file-locations)). Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
 
-2. **Live probe** — Each discovered server is contacted concurrently. Toolpool calls `tools/list` on it and records which tools it exposes, how long it took, and any errors.
+2. **Live probe** — Each discovered server is contacted concurrently. Tooldex calls `tools/list` on it and records which tools it exposes, how long it took, and any errors.
 
 3. **Deduplication** — If the same server name appears in multiple clients (e.g., `browserbase` in both Claude Code and Cursor), both are retained as separate entries under their respective clients. Duplicate server names across clients are reported in the `duplicates` field.
 
@@ -85,7 +85,7 @@ When you run `toolpool run`, the following happens in order:
 
 ## Config file locations
 
-Toolpool checks all of the following on every run. Files that do not exist are skipped silently.
+Tooldex checks all of the following on every run. Files that do not exist are skipped silently.
 
 ### Claude Code
 
@@ -118,15 +118,15 @@ Toolpool checks all of the following on every run. Files that do not exist are s
 
 ### Docker MCP Toolkit
 
-Toolpool reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
+Tooldex reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
 
-**Project-scoped paths** are discovered by walking up the directory tree from `cwd` until the home directory. This means running `toolpool run` from a nested subdirectory will still find a `.mcp.json` at the project root.
+**Project-scoped paths** are discovered by walking up the directory tree from `cwd` until the home directory. This means running `tooldex run` from a nested subdirectory will still find a `.mcp.json` at the project root.
 
 ---
 
 ## MCP config format
 
-All JSON-based clients use the same `mcpServers` structure. Toolpool understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
+All JSON-based clients use the same `mcpServers` structure. Tooldex understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
 
 ### stdio server (runs a local process)
 
@@ -183,9 +183,9 @@ type = "http"
 url = "https://api.githubcopilot.com/mcp/"
 ```
 
-### What Toolpool detects from these files
+### What Tooldex detects from these files
 
-For each config file found, Toolpool reports:
+For each config file found, Tooldex reports:
 
 - **`status`** — `found` / `not_found` / `empty` / `parse_error` / `read_error`
 - **`server_ids`** — list of server names parsed from the file
@@ -203,7 +203,7 @@ For each server probed:
 ## CLI reference
 
 ```
-toolpool [OPTIONS] COMMAND [ARGS]
+tooldex [OPTIONS] COMMAND [ARGS]
 ```
 
 ### Global options
@@ -213,12 +213,12 @@ toolpool [OPTIONS] COMMAND [ARGS]
 | `--version`, `-V` | Print version and exit |
 | `--help`, `-h` | Show help |
 
-### `toolpool run`
+### `tooldex run`
 
 Autodiscover MCP servers and start the UI.
 
 ```bash
-toolpool run [OPTIONS]
+tooldex run [OPTIONS]
 ```
 
 | Flag | Default | Description |
@@ -238,35 +238,35 @@ All flags accept both `--flag` and `-flag` prefix.
 
 ```bash
 # Discover and launch UI
-toolpool run
+tooldex run
 
 # Custom port and host
-toolpool run --port 9000 --host 0.0.0.0
+tooldex run --port 9000 --host 0.0.0.0
 
 # Just print what was found, don't start the server
-toolpool run --no-serve
+tooldex run --no-serve
 
 # Skip slow or broken servers during probing
-toolpool run --no-probe node-api-docs --no-probe local-mcp
+tooldex run --no-probe node-api-docs --no-probe local-mcp
 
 # Include an extra config file
-toolpool run --config ~/shared/team-servers.json
+tooldex run --config ~/shared/team-servers.json
 
 # Increase timeout for slow servers
-toolpool run --timeout 30
+tooldex run --timeout 30
 
 # Use all 16 cores for probing
-toolpool run --concurrency 16
+tooldex run --concurrency 16
 
 # Pipe the discovery result into jq
-toolpool run --json | jq '.duplicates'
+tooldex run --json | jq '.duplicates'
 ```
 
 ---
 
 ## JSON output
 
-`toolpool run --json` prints a single JSON object to stdout and exits. No servers are probed; this is fast and side-effect-free for use in scripts and CI.
+`tooldex run --json` prints a single JSON object to stdout and exits. No servers are probed; this is fast and side-effect-free for use in scripts and CI.
 
 ```json
 {
@@ -335,7 +335,7 @@ All endpoints respond with or without a trailing slash.
 
 ## Testing
 
-Toolpool has a `pytest` unit-test suite that runs in CI on every PR:
+Tooldex has a `pytest` unit-test suite that runs in CI on every PR:
 
 ```bash
 pip install -e ".[test]"
@@ -346,25 +346,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#testing) for details. For ad-hoc manual ch
 
 ```bash
 # Verify discovery against your local config
-toolpool run --no-serve
+tooldex run --no-serve
 
 # Inspect the raw discovery payload
-toolpool run --json | jq .
+tooldex run --json | jq .
 
 # Check a specific extra config file
-toolpool run --config ./my-config.json --json
+tooldex run --config ./my-config.json --json
 
 # Confirm a server is reachable with a longer timeout
-toolpool run --timeout 30 --no-probe github
+tooldex run --timeout 30 --no-probe github
 ```
 
 To run the package from source without installing:
 
 ```bash
 git clone <repo>
-cd Toolpool
+cd Tooldex
 pip install -e .
-toolpool --version
+tooldex --version
 ```
 
 ---

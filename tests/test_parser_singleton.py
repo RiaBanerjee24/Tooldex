@@ -1,8 +1,8 @@
-"""Unit tests for toolpool/core/parsers/parser.py."""
+"""Unit tests for tooldex/core/parsers/parser.py."""
 import pytest
 
-from toolpool.core.models.manifest import ToolpoolManifest, ToolpoolMetadata
-from toolpool.core.parsers.parser import (
+from tooldex.core.models.manifest import TooldexManifest, TooldexMetadata
+from tooldex.core.parsers.parser import (
     get_discovery_sources,
     get_last_scanned,
     get_parser,
@@ -12,8 +12,8 @@ from toolpool.core.parsers.parser import (
 )
 
 
-def _manifest(name="Test") -> ToolpoolManifest:
-    return ToolpoolManifest(metadata=ToolpoolMetadata(name=name))
+def _manifest(name="Test") -> TooldexManifest:
+    return TooldexManifest(metadata=TooldexMetadata(name=name))
 
 
 class TestGetParser:

@@ -1,12 +1,12 @@
-"""Unit tests for toolpool/core/discovery/to_manifest.py."""
-from toolpool.core.discovery.results import (
+"""Unit tests for tooldex/core/discovery/to_manifest.py."""
+from tooldex.core.discovery.results import (
     ConfigDetectionResult,
     DiscoveredTool,
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from toolpool.core.discovery.to_manifest import build_manifest
-from toolpool.core.models.server import MCPServer
+from tooldex.core.discovery.to_manifest import build_manifest
+from tooldex.core.models.server import MCPServer
 
 
 def _config_result(*servers: MCPServer) -> ConfigDetectionResult:

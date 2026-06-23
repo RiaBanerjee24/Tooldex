@@ -1,4 +1,4 @@
-# Toolpool — Developer Reference
+# Tooldex — Developer Reference
 
 Technical reference for contributors. Covers architecture, data flow, design decisions, and module responsibilities.
 
@@ -20,7 +20,7 @@ Technical reference for contributors. Covers architecture, data flow, design dec
 ## Project structure
 
 ```
-toolpool/
+tooldex/
 ├── __init__.py              # __version__ via importlib.metadata
 ├── cli.py                   # Typer CLI — run command, flags, startup
 ├── _cli_output.py           # print_banner(), print_summary(), result_as_json()
@@ -35,7 +35,7 @@ toolpool/
 │
 └── core/
     ├── models/
-    │   ├── manifest.py      # ToolpoolManifest, ToolpoolMetadata
+    │   ├── manifest.py      # TooldexManifest, TooldexMetadata
     │   └── server.py        # MCPServer, DiscoveredToolLite
     │
     ├── parsers/
@@ -49,7 +49,7 @@ toolpool/
         ├── results.py           # DiscoverySource, ConfigDetectionResult, ToolDiscoveryResult
         ├── mcp_client.py        # Async prober: stdio / http / sse, agent CLI fallback
         ├── tool_discovery.py    # Sync wrappers, list_tools_for_all(), asyncio bridge
-        ├── to_manifest.py       # Discovery output → ToolpoolManifest
+        ├── to_manifest.py       # Discovery output → TooldexManifest
         ├── _docker_mcp.py       # Docker MCP profile reader (no live probe needed)
         ├── _status_claude.py    # Optional: enrich via `claude mcp list`
         ├── _status_codex.py     # Optional: enrich via `codex mcp list`
@@ -60,14 +60,14 @@ toolpool/
 
 ## Discovery pipeline
 
-Toolpool has a single data path: autodiscovery from MCP client config files.
+Tooldex has a single data path: autodiscovery from MCP client config files.
 
 ```
 MCP client config files (.json, .toml)
   → config_detector.py  (detect_all — reads all known config locations)
   → mcp_client.py       (live probe each server, async)
   → tool_discovery.py   (sync wrapper + asyncio bridge)
-  → to_manifest.py      (build_manifest → ToolpoolManifest)
+  → to_manifest.py      (build_manifest → TooldexManifest)
   → parser.py           (init_parser_from_manifest — installs singleton)
   → API routers         (get_parser().manifest)
 ```
@@ -93,7 +93,7 @@ MCP client config files (.json, .toml)
 
 **Docker MCP Toolkit** is read via `docker mcp profile ls --format json` — no live probing needed. Each profile becomes a `DiscoverySource`.
 
-**Live status enrichment**: if the user grants permission, toolpool shells out to `claude mcp list` / `codex mcp list` / `cursor-agent mcp list-tools` and attaches connection status strings to the relevant servers. Skipped in `--json` / `--no-serve` mode.
+**Live status enrichment**: if the user grants permission, tooldex shells out to `claude mcp list` / `codex mcp list` / `cursor-agent mcp list-tools` and attaches connection status strings to the relevant servers. Skipped in `--json` / `--no-serve` mode.
 
 **Env var substitution** in `_parsers.py`: `${VAR}` and `$VAR` references inside `env` and `args` fields are expanded against the process environment. Unresolved references pass through unchanged.
 
@@ -125,7 +125,7 @@ A `FileNotFoundError` on the server command returns a `connection_failed` result
 
 | Name | Type | Purpose |
 |---|---|---|
-| `_parser` | `ToolpoolParser` | Wraps the active `ToolpoolManifest` |
+| `_parser` | `TooldexParser` | Wraps the active `TooldexManifest` |
 | `_last_scanned` | `str` (ISO-8601 UTC) | Timestamp of the last manifest install; returned in `GET /api/servers/` |
 | `_startup_time` | `float` (`time.monotonic()`) | Set once at first install; drives `uptime_seconds` in `GET /api/health/` |
 | `_discovery_sources` | `list[DiscoverySource]` | From the last `detect_all()`; served by `GET /api/files/` |
@@ -161,11 +161,11 @@ FastAPI's uvicorn event loop is completely separate. API-triggered rescans use `
 
 All models are Pydantic v2 `BaseModel` subclasses.
 
-### `ToolpoolManifest` (`manifest.py`)
+### `TooldexManifest` (`manifest.py`)
 
 | Field | Type | Description |
 |---|---|---|
-| `metadata` | `ToolpoolMetadata` | Name and optional description |
+| `metadata` | `TooldexMetadata` | Name and optional description |
 | `servers` | `dict[str, MCPServer]` | Keyed by qualified ID (`{client}:{server_id}`) |
 | `all_tools` | `list[str]` | Sorted unique tool names across all servers |
 | `server_agents_index` | `dict[str, list[dict]]` | Reserved for future agent discovery |
@@ -218,8 +218,8 @@ Single source of truth: `pyproject.toml`.
 pyproject.toml          version = "0.1.0"
     ↓ (hatchling reads at build time)
 installed package metadata
-    ↓ (importlib.metadata.version("toolpool") at runtime)
-toolpool.__version__    "0.1.0"
+    ↓ (importlib.metadata.version("tooldex") at runtime)
+tooldex.__version__    "0.1.0"
     ↓
 cli.py                  --version flag, startup banner
 api/app.py              FastAPI app version field

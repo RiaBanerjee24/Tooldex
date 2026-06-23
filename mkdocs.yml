@@ -1,8 +1,8 @@
-site_name: Toolpool
-site_url: https://riabanerjee24.github.io/Toolpool/
+site_name: Tooldex
+site_url: https://riabanerjee24.github.io/Tooldex/
 site_description: Autodiscover MCP servers across AI clients and surface them in a unified UI
-repo_url: https://github.com/RiaBanerjee24/Toolpool
-repo_name: RiaBanerjee24/Toolpool
+repo_url: https://github.com/RiaBanerjee24/Tooldex
+repo_name: RiaBanerjee24/Tooldex
 
 theme:
   name: material
@@ -34,7 +34,7 @@ markdown_extensions:
   - pymdownx.inlinehilite
 
 nav:
-  - Toolpool: index.md
+  - Tooldex: index.md
 
 extra_css:
   - stylesheets/extra.css

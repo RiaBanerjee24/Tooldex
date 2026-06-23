@@ -1,9 +1,9 @@
-"""Unit tests for toolpool/core/discovery/_parsers.py."""
+"""Unit tests for tooldex/core/discovery/_parsers.py."""
 from pathlib import Path
 
 import pytest
 
-from toolpool.core.discovery._parsers import (
+from tooldex.core.discovery._parsers import (
     parse_claude_json,
     parse_mcp_servers,
     resolve_dict,

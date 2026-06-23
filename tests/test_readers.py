@@ -1,11 +1,11 @@
-"""Unit tests for toolpool/core/discovery/_readers.py."""
+"""Unit tests for tooldex/core/discovery/_readers.py."""
 import json
 from pathlib import Path
 
 import pytest
 
-from toolpool.core.discovery._readers import read_codex_toml, read_json
-from toolpool.core.discovery.results import SourceStatus
+from tooldex.core.discovery._readers import read_codex_toml, read_json
+from tooldex.core.discovery.results import SourceStatus
 
 
 class TestReadJson:

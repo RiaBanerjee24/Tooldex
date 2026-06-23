@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install toolpool with test dependencies
+      - name: Install tooldex with test dependencies
         run: pip install -e ".[test]"
 
       - name: Run unit tests
