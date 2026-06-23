@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "tooldex"
 version = "0.1.0"
-description = "AI Agent Permission Observatory"
+description = "Unified MCP Server Observatory"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

@@ -9,6 +9,7 @@ __pycache__/
 build/
 .eggs/
 pip-wheel-metadata/
+.pypirc
 
 # Virtual environments
 .venv/
