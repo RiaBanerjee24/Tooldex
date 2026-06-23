@@ -16,6 +16,7 @@ Toolpool autodiscovers MCP servers configured across your AI clients — Claude 
 - [JSON output](#json-output)
 - [API endpoints](#api-endpoints)
 - [Testing](#testing)
+- [Contributing](#contributing)
 
 ---
 
@@ -334,7 +335,14 @@ All endpoints respond with or without a trailing slash.
 
 ## Testing
 
-No test runner is configured yet. To run any ad-hoc checks:
+Toolpool has a `pytest` unit-test suite that runs in CI on every PR:
+
+```bash
+pip install -e ".[test]"
+pytest
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#testing) for details. For ad-hoc manual checks against your own MCP config:
 
 ```bash
 # Verify discovery against your local config
@@ -358,3 +366,9 @@ cd Toolpool
 pip install -e .
 toolpool --version
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, the development workflow, and pull request guidelines.

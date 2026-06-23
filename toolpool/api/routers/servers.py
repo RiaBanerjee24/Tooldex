@@ -1,6 +1,7 @@
 """GET /api/servers/, GET /api/servers/{id}/, POST /api/servers/{id}/rescan/"""
 import asyncio
 import re
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from toolpool.core.parsers.parser import get_parser, get_last_scanned
@@ -14,6 +15,16 @@ _SENSITIVE_ENV_SEGMENTS = frozenset({"key", "secret", "token", "password", "apik
 def _is_sensitive_env(name: str) -> bool:
     parts = re.split(r"[_\-]", name.lower())
     return any(p in _SENSITIVE_ENV_SEGMENTS for p in parts)
+
+
+def _friendly_path(source_path) -> str | None:
+    """Return a ~-prefixed path rather than exposing the raw absolute path."""
+    if not source_path:
+        return None
+    try:
+        return "~" + str(Path(source_path).relative_to(Path.home()))
+    except ValueError:
+        return source_path
 
 
 def _redact_server(d: dict) -> dict:
@@ -46,7 +57,7 @@ async def list_servers():
             "agent_count": len(agents_connected),
             "tool_count": tool_count,
             "discovered_tool_count": tool_count,
-            "source_file": server.source_path,
+            "source_file": _friendly_path(server.source_path),
         }))
 
     total_tools = sum(len(s.discovered_tools) for s in manifest.servers.values())
@@ -67,10 +78,7 @@ async def get_server(server_id: str):
     if not server:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": f"Server '{server_id}' not found",
-                "available": list(manifest.servers.keys()),
-            }
+            detail={"error": f"Server '{server_id}' not found"},
         )
 
     agents_connected = manifest.server_agents_index.get(server_id, [])
@@ -93,6 +101,14 @@ async def rescan_server(server_id: str):
         raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
 
     result = await asyncio.to_thread(list_tools_for, server)
+
+    # Re-fetch after the thread in case a full rescan ran concurrently and
+    # replaced the manifest. Writing to a stale manifest would be a silent no-op.
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found after rescan"})
+
     new_tools = [
         DiscoveredToolLite(name=t.name, description=t.description, input_schema=t.input_schema)
         for t in result.tools

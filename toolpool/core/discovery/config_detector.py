@@ -65,7 +65,8 @@ def detect_all(
     for raw_path in (custom_paths or []):
         path = Path(raw_path).expanduser().resolve()
         source = read_json("custom", path, env=env)
-        assert source is not None
+        if source is None:
+            continue
         result.sources.append(source)
         _merge(result, source, client="custom")
 

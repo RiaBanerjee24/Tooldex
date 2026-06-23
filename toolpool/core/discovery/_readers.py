@@ -74,8 +74,8 @@ def read_json(
 
     if "mcpServers" not in raw:
         return DiscoverySource(
-            client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-            error='Missing "mcpServers" key — expected {"mcpServers": {...}}',
+            client=client, path=path_str, status=SourceStatus.EMPTY,
+            error='No "mcpServers" key — not an MCP config file',
         )
 
     if not isinstance(raw["mcpServers"], dict):
@@ -112,8 +112,21 @@ def read_claude_json(
     except OSError as exc:
         return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
 
+    duplicate_keys: list[str] = []
+
+    def _pairs_hook(pairs: list) -> dict:
+        seen: set[str] = set()
+        out: dict = {}
+        for k, v in pairs:
+            if k in seen:
+                duplicate_keys.append(k)
+            else:
+                seen.add(k)
+            out[k] = v
+        return out
+
     try:
-        raw = json.loads(text)
+        raw = json.loads(text, object_pairs_hook=_pairs_hook)
     except json.JSONDecodeError as exc:
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
@@ -128,7 +141,10 @@ def read_claude_json(
 
     servers = parse_claude_json(raw, path_str, cwd, env=env)
     status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
-    return DiscoverySource(client=client, path=path_str, status=status, servers=servers)
+    return DiscoverySource(
+        client=client, path=path_str, status=status, servers=servers,
+        in_file_duplicates=duplicate_keys,
+    )
 
 
 def read_codex_toml(

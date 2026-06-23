@@ -107,6 +107,16 @@ export default function App() {
                 >
                     docs ↗
                 </a>
+                <a
+                    href="https://riabanerjee24.github.io/Toolpool/#contributing"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", gap: 4, color: "#4a5268", textDecoration: "none", letterSpacing: "0.05em" }}
+                    onMouseEnter={e => { e.currentTarget.style.color = "#BED754"; e.currentTarget.querySelector("span").style.color = "var(--red)" }}
+                    onMouseLeave={e => { e.currentTarget.style.color = "#4a5268"; e.currentTarget.querySelector("span").style.color = "#4a5268" }}
+                >
+                    Contribute <span style={{ transition: "color 0.15s ease" }}>♥</span>
+                </a>
             </footer>
         </div>
     )

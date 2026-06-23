@@ -38,10 +38,19 @@ async def rescan(request: Request):
         from toolpool._cli_output import print_summary, print_banner
         import sys
 
-        config_result = await asyncio.to_thread(_silenced, detect_all)
-        store_discovery_sources(config_result.sources)
-        servers_to_probe = list(config_result.servers.values())
-        tool_results = await asyncio.to_thread(_silenced, list_tools_for_all, servers_to_probe)
+        try:
+            config_result = await asyncio.wait_for(
+                asyncio.to_thread(_silenced, detect_all), timeout=120.0
+            )
+            store_discovery_sources(config_result.sources)
+            servers_to_probe = list(config_result.servers.values())
+            tool_results = await asyncio.wait_for(
+                asyncio.to_thread(_silenced, list_tools_for_all, servers_to_probe),
+                timeout=120.0,
+            )
+        except asyncio.TimeoutError:
+            return {"status": "timeout", "error": "Rescan exceeded 120s limit"}
+
         manifest = build_manifest(config_result, tool_results)
         init_parser_from_manifest(manifest)
 

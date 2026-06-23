@@ -88,7 +88,9 @@ def _save_pref(key: str, value) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     prefs = _load_prefs()
     prefs[key] = value
-    p.write_text(_json.dumps(prefs, indent=2))
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(_json.dumps(prefs, indent=2))
+    tmp.replace(p)  # atomic rename on POSIX
 
 
 # ---------------------------------------------------------------------------

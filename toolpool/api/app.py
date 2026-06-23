@@ -4,6 +4,7 @@ FastAPI application factory.
 Registers all routers and serves the pre-built React UI.
 """
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -37,9 +38,8 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_methods=["*"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
-        allow_credentials=True,
     )
 
     # API routes
@@ -62,9 +62,13 @@ def create_app() -> FastAPI:
         @app.get("/", include_in_schema=False)
         @app.get("/{path:path}", include_in_schema=False)
         async def serve_ui(path: str = ""):
-            file = ui_dist / path
-            if file.exists() and file.is_file():
+            ui_root = ui_dist.resolve()
+            file = (ui_root / path).resolve()
+            if (
+                str(file).startswith(str(ui_root) + os.sep)
+                and file.is_file()
+            ):
                 return FileResponse(file)
-            return FileResponse(ui_dist / "index.html")
+            return FileResponse(ui_root / "index.html")
 
     return app

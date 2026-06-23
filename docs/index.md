@@ -356,3 +356,9 @@ _AGENT_FALLBACK_CMDS = {
 ```
 
 No changes needed to `_readers.py` or `_parsers.py` if the client uses the standard `{"mcpServers": {...}}` JSON format.
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/RiaBanerjee24/Toolpool/blob/main/CONTRIBUTING.md) on GitHub for setup instructions, the development workflow, and pull request guidelines.

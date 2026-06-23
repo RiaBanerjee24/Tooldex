@@ -183,9 +183,13 @@ async def _probe_http(server: MCPServer) -> ToolDiscoveryResult:
         )
 
     import httpx
-    http_client = httpx.AsyncClient(headers=server.headers) if server.headers else None
-    async with streamable_http_client(server.url, http_client=http_client) as (read, write, _):
-        return await _run_session(read, write, server.id)
+    if server.headers:
+        async with httpx.AsyncClient(headers=server.headers) as http_client:
+            async with streamable_http_client(server.url, http_client=http_client) as (read, write, _):
+                return await _run_session(read, write, server.id)
+    else:
+        async with streamable_http_client(server.url) as (read, write, _):
+            return await _run_session(read, write, server.id)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +243,7 @@ async def _probe_via_agent(server: MCPServer) -> ToolDiscoveryResult:
     try:
         proc = await asyncio.create_subprocess_exec(
             *full_cmd,
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
