@@ -50,6 +50,30 @@ export default function App() {
             <Topbar tab={tab} setTab={setTab} health={health} />
             <div style={{ flex: 1 }}>
                 <Wrap>
+                    <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "16px 0 0", gap: 16, flexWrap: "wrap",
+                    }}>
+                        <span style={{
+                            fontSize: 12, color: "var(--text3)", fontFamily: "var(--font-body)",
+                        }}>
+                            A unified place to track your MCP servers across clients.
+                        </span>
+                        <a
+                            href="https://riabanerjee24.github.io/Toolpool/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                fontSize: 12, color: "var(--lime-dim)", textDecoration: "none",
+                                fontFamily: "var(--font-body)", fontWeight: 600, whiteSpace: "nowrap",
+                                borderBottom: "1px solid transparent", transition: "color 0.12s, border-color 0.12s",
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = "var(--lime)"; e.currentTarget.style.borderColor = "var(--lime)" }}
+                            onMouseLeave={e => { e.currentTarget.style.color = "var(--lime-dim)"; e.currentTarget.style.borderColor = "transparent" }}
+                        >
+                            Documentation ↗
+                        </a>
+                    </div>
                     {tab === "Dashboard" && (
                         <Dashboard
                             health={health}
@@ -98,16 +122,6 @@ export default function App() {
                     </a>
                 </div>
                 <a
-                    href="https://riabanerjee24.github.io/Toolpool/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#4a5268", textDecoration: "none", letterSpacing: "0.05em" }}
-                    onMouseEnter={e => e.target.style.color = "#BED754"}
-                    onMouseLeave={e => e.target.style.color = "#4a5268"}
-                >
-                    docs ↗
-                </a>
-                <a
                     href="https://riabanerjee24.github.io/Toolpool/#contributing"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -115,7 +129,7 @@ export default function App() {
                     onMouseEnter={e => { e.currentTarget.style.color = "#BED754"; e.currentTarget.querySelector("span").style.color = "var(--red)" }}
                     onMouseLeave={e => { e.currentTarget.style.color = "#4a5268"; e.currentTarget.querySelector("span").style.color = "#4a5268" }}
                 >
-                    Contribute <span style={{ transition: "color 0.15s ease" }}>♥</span>
+                    contribute <span style={{ transition: "color 0.15s ease" }}>♥</span>
                 </a>
             </footer>
         </div>
