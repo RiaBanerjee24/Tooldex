@@ -1,7 +1,30 @@
-# Tooldex
+# 🔭 Tooldex
+> Unified MCP Server Observatory — autodiscover, inspect, and monitor Model Context Protocol tools across Claude Code, Cursor, Codex, and Docker
 
-Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+[![PyPI version](https://badge.fury.io/py/tooldex.svg)](https://pypi.org/project/tooldex/)
+[![Downloads](https://img.shields.io/pypi/dw/tooldex)](https://pypistats.org/packages/tooldex)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 
+Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces every exposed tool in a unified UI with a live REST API. No manual config. Run it from any project directory and it finds everything.
+
+> ⚠️ **Tool Poisoning Attacks are real.** A malicious MCP server can expose dozens of legitimate tools and hide one bad one. Tooldex gives you full visibility into your MCP tool surface before anything executes — essential for any agentic AI environment.
+
+![Tooldex Demo](./assets/tooldex-demo.gif)
+
+---
+
+## Why Tooldex?
+
+As your agentic AI setup grows across distributed systems and multiple clients, you lose track of what MCP servers are running and what tools they expose. Tooldex fixes that:
+
+- 🔍 **Autodiscovery** — finds every MCP server across all your AI clients
+- 🛠️ **Tool Inspector** — probes each server live and lists every tool it exposes
+- 🖥️ **Unified UI** — single dashboard across all your environments
+- ⚡ **REST API** — query your MCP tool surface programmatically
+- 🔒 **Security visibility** — spot tool poisoning attempts before they run
+
+---
 ---
 
 ## Contents
