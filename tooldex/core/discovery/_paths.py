@@ -27,6 +27,13 @@ Supported locations:
 
     MCP JSON            ~/.mcp.json                 (global, team/shared definitions)
                         <project>/.mcp.json          (project, walk up, stops at ~)
+                        <project>/mcp.json           (bare, project, walk up, stops at ~)
+
+    Agents              ~/.agents/mcp.json          (global)
+                        <project>/.agents/mcp.json   (project, walk up, stops at ~)
+
+    Antigravity IDE     ~/.gemini/antigravity/mcp_config.json   (global)
+                        <project>/.gemini/antigravity/mcp_config.json  (project, walk up, stops at ~)
 """
 from __future__ import annotations
 
@@ -45,6 +52,12 @@ CLIENT_PRIORITY = (
     "codex",
     "mcp_json_project",
     "mcp_json_user",
+    "mcp_json_bare_project",
+    "agents_project",
+    "agents_project_dotfile",
+    "agents_user",
+    "agents_user_dotfile",
+    "antigravity_user",
 )
 
 
@@ -102,6 +115,30 @@ def mcp_json_project_path(cwd: Path) -> Optional[Path]:
     return walk_up_for(cwd, (".mcp.json",))
 
 
+def mcp_json_bare_project_path(cwd: Path) -> Optional[Path]:
+    return walk_up_for(cwd, ("mcp.json",))
+
+
+def agents_user_path() -> Path:
+    return Path.home() / ".agents" / "mcp.json"
+
+
+def agents_user_dotfile_path() -> Path:
+    return Path.home() / ".agents" / ".mcp.json"
+
+
+def agents_project_path(cwd: Path) -> Optional[Path]:
+    return walk_up_for(cwd, (".agents", "mcp.json"))
+
+
+def agents_project_dotfile_path(cwd: Path) -> Optional[Path]:
+    return walk_up_for(cwd, (".agents", ".mcp.json"))
+
+
+def antigravity_user_path() -> Path:
+    return Path.home() / ".gemini" / "antigravity" / "mcp_config.json"
+
+
 def build_plan(cwd: Path) -> list[tuple[str, Callable[[], Optional[Path]]]]:
     """
     Build the list of (client_id, path_resolver) pairs for the standard
@@ -109,9 +146,15 @@ def build_plan(cwd: Path) -> list[tuple[str, Callable[[], Optional[Path]]]]:
     are handled separately in config_detector because they need custom parsers.
     """
     return [
-        ("claude_code_project", lambda: claude_code_project_path(cwd)),
-        ("cursor_project",      lambda: cursor_project_path(cwd)),
-        ("cursor_user",         cursor_user_path),
-        ("mcp_json_project",    lambda: mcp_json_project_path(cwd)),
-        ("mcp_json_user",       mcp_json_user_path),
+        ("claude_code_project",    lambda: claude_code_project_path(cwd)),
+        ("cursor_project",         lambda: cursor_project_path(cwd)),
+        ("cursor_user",            cursor_user_path),
+        ("mcp_json_project",       lambda: mcp_json_project_path(cwd)),
+        ("mcp_json_user",          mcp_json_user_path),
+        ("mcp_json_bare_project",  lambda: mcp_json_bare_project_path(cwd)),
+        ("agents_project",         lambda: agents_project_path(cwd)),
+        ("agents_project_dotfile", lambda: agents_project_dotfile_path(cwd)),
+        ("agents_user",            agents_user_path),
+        ("agents_user_dotfile",    agents_user_dotfile_path),
+        ("antigravity_user",       antigravity_user_path),
     ]

@@ -8,6 +8,22 @@ from tooldex.core.discovery._readers import read_codex_toml, read_json
 from tooldex.core.discovery.results import SourceStatus
 
 
+class TestJsonWithComments:
+    def test_line_comments_parsed(self, tmp_path):
+        jsonc = tmp_path / "mcp.json"
+        jsonc.write_text('{\n  "mcpServers": {\n    "godot": {\n      "command": "node",\n      "env": {"DEBUG": "true" // enable logging\n      }\n    }\n  }\n}')
+        source = read_json("custom", jsonc, env={})
+        assert source.status == SourceStatus.FOUND
+        assert source.servers[0].id == "godot"
+
+    def test_block_comments_parsed(self, tmp_path):
+        jsonc = tmp_path / "mcp.json"
+        jsonc.write_text('{\n  "mcpServers": {\n    "fs": {\n      /* stdio server */\n      "command": "npx"\n    }\n  }\n}')
+        source = read_json("custom", jsonc, env={})
+        assert source.status == SourceStatus.FOUND
+        assert source.servers[0].id == "fs"
+
+
 class TestReadJson:
     def test_none_path_returns_none(self):
         assert read_json("client", None) is None

@@ -133,7 +133,8 @@ def _infer_package(command: str | None, args: list[str]) -> str | None:
 def _spec_to_server(server_id: str, spec: dict, env: dict[str, str]) -> MCPServer:
     """Build one MCPServer from one mcpServers entry."""
     command = spec.get("command")
-    url = spec.get("url")
+    # antigravity IDE uses "serverUrl" instead of the standard "url"
+    url = spec.get("url") or spec.get("serverUrl")
     args_raw = spec.get("args") or []
     env_raw = spec.get("env") or {}
     description = spec.get("description")

@@ -208,18 +208,25 @@ function ScannedAt({ timestamp }) {
 // ---------------------------------------------------------------------------
 
 const CLIENT_META = {
-    claude_code_user:     { group: "Claude",    label: "Claude Code",  scope: "global" },
-    claude_code_project:  { group: "Claude",    label: "Claude Code",  scope: "project" },
-    cursor_user:          { group: "Cursor",    label: "Cursor",       scope: "global" },
-    cursor_project:       { group: "Cursor",    label: "Cursor",       scope: "project" },
-    codex:                { group: "Codex",     label: "Codex",        scope: "global" },
-    codex_project:        { group: "Codex",     label: "Codex",        scope: "project" },
-    mcp_json_user:        { group: "MCP JSON",  label: "MCP JSON",     scope: "global" },
-    mcp_json_project:     { group: "MCP JSON",  label: "MCP JSON",     scope: "project" },
-    custom:               { group: "Custom",    label: "Custom",       scope: null },
+    claude_code_user:     { group: "Claude",       label: "Claude Code",  scope: "global" },
+    claude_code_project:  { group: "Claude",       label: "Claude Code",  scope: "project" },
+    cursor_user:          { group: "Cursor",       label: "Cursor",       scope: "global" },
+    cursor_project:       { group: "Cursor",       label: "Cursor",       scope: "project" },
+    codex:                { group: "Codex",        label: "Codex",        scope: "global" },
+    codex_project:        { group: "Codex",        label: "Codex",        scope: "project" },
+    mcp_json_user:        { group: "MCP JSON",     label: "MCP JSON",     scope: "global" },
+    mcp_json_project:     { group: "MCP JSON",     label: "MCP JSON",     scope: "project" },
+    antigravity_user:        { group: "Gemini",   label: "Gemini (Antigravity)",  scope: "global" },
+    antigravity_project:     { group: "Gemini",   label: "Gemini (Antigravity)",  scope: "project" },
+    mcp_json_bare_project:   { group: "Custom",   label: "mcp.json",              scope: "project" },
+    agents_user:             { group: "Custom",   label: "Agents",   scope: "global" },
+    agents_user_dotfile:     { group: "Custom",   label: "Agents",   scope: "global" },
+    agents_project:          { group: "Custom",   label: "Agents",   scope: "project" },
+    agents_project_dotfile:  { group: "Custom",   label: "Agents",   scope: "project" },
+    custom:                  { group: "Custom",   label: "Custom",                scope: null },
 }
 
-const GROUP_ORDER = ["Claude", "Cursor", "Codex", "MCP JSON", "Docker MCP", "Custom"]
+const GROUP_ORDER = ["Claude", "Cursor", "Codex", "MCP JSON", "Gemini", "Docker MCP", "Custom"]
 
 function classifyClient(client) {
     if (!client) return { group: "Unknown", label: "—", scope: null }
