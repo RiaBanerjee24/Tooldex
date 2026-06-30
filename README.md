@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 
+**Questions, feedback, or just want to say hi?** → [Contact the Dev](#contact-the-dev) · [banerjeeria2406@gmail.com](mailto:banerjeeria2406@gmail.com)
+
 Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces every exposed tool in a unified UI with a live REST API. No manual config. Run it from any project directory and it finds everything.
 
 > ⚠️ **Tool Poisoning Attacks are real.** A malicious MCP server can expose dozens of legitimate tools and hide one bad one. Tooldex gives you full visibility into your MCP tool surface before anything executes — essential for any agentic AI environment.
@@ -40,6 +42,7 @@ As your agentic AI setup grows across distributed systems and multiple clients, 
 - [API endpoints](#api-endpoints)
 - [Testing](#testing)
 - [Contributing](#contributing)
+- [Contact the Dev](#contact-the-dev)
 
 ---
 
@@ -395,3 +398,13 @@ tooldex --version
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, the development workflow, and pull request guidelines.
+
+---
+
+## Contact the Dev
+
+Have a bug report, feature request, or just want to share feedback? Reach out directly:
+
+**Email:** [banerjeeria2406@gmail.com](mailto:banerjeeria2406@gmail.com)
+
+All feedback is welcome — whether it's a quick note or a detailed suggestion.
