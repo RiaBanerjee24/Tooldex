@@ -1,5 +1,5 @@
 # 🔭 Tooldex
-> Unified MCP Server Observatory — autodiscover, inspect, and monitor Model Context Protocol tools across Claude Code, Cursor, Codex, and Docker
+> Unified MCP Server Observatory — autodiscover, inspect, and monitor Model Context Protocol tools across Claude Code, Cursor, Codex, Gemini, Agents, and Docker
 
 [![PyPI version](https://badge.fury.io/py/tooldex.svg)](https://pypi.org/project/tooldex/)
 [![Downloads](https://img.shields.io/pypi/dw/tooldex)](https://pypistats.org/packages/tooldex)
@@ -8,7 +8,7 @@
 
 **Questions, feedback, or just want to say hi?** → [Contact the Dev](#contact-the-dev) · [banerjeeria2406@gmail.com](mailto:banerjeeria2406@gmail.com)
 
-Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Docker MCP Toolkit — and surfaces every exposed tool in a unified UI with a live REST API. No manual config. Run it from any project directory and it finds everything.
+Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Gemini (Antigravity), Agents, Docker MCP Toolkit — and surfaces every exposed tool in a unified UI with a live REST API. No manual config. Run it from any project directory and it finds everything.
 
 > ⚠️ **Tool Poisoning Attacks are real.** A malicious MCP server can expose dozens of legitimate tools and hide one bad one. Tooldex gives you full visibility into your MCP tool surface before anything executes — essential for any agentic AI environment.
 
@@ -49,7 +49,7 @@ As your agentic AI setup grows across distributed systems and multiple clients, 
 ## Requirements
 
 - Python 3.10 or later
-- At least one supported MCP client configured (Claude Code, Cursor, Codex, or Docker MCP Toolkit)
+- At least one supported MCP client configured (Claude Code, Cursor, Codex, Gemini, or Docker MCP Toolkit)
 
 ---
 
@@ -141,18 +141,36 @@ Tooldex checks all of the following on every run. Files that do not exist are sk
 |---|---|
 | Global | `~/.mcp.json` |
 | Project | `<project>/.mcp.json` |
+| Project (bare) | `<project>/mcp.json` |
+
+### Agents
+
+| Scope | Path |
+|---|---|
+| Global | `~/.agents/mcp.json` |
+| Global | `~/.agents/.mcp.json` |
+| Project | `<project>/.agents/mcp.json` |
+| Project | `<project>/.agents/.mcp.json` |
+
+### Gemini (Antigravity IDE)
+
+| Scope | Path |
+|---|---|
+| Global | `~/.gemini/antigravity/mcp_config.json` |
 
 ### Docker MCP Toolkit
 
 Tooldex reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
 
-**Project-scoped paths** are discovered by walking up the directory tree from `cwd` until the home directory. This means running `tooldex run` from a nested subdirectory will still find a `.mcp.json` at the project root.
+**Project-scoped paths** are discovered by walking up the directory tree from `cwd` until the home directory. This means running `tooldex run` from a nested subdirectory will still find config files at the project root. Both `mcp.json` and `.mcp.json` are checked at every level of the walk.
 
 ---
 
 ## MCP config format
 
 All JSON-based clients use the same `mcpServers` structure. Tooldex understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
+
+**Comments are supported.** Tooldex parses JSON5, so `//` line comments and `/* block */` comments in config files are handled gracefully — no need to strip them before running.
 
 ### stdio server (runs a local process)
 

@@ -6,7 +6,7 @@ and returns a DiscoverySource — no network calls, no subprocesses.
 """
 from __future__ import annotations
 
-import json
+import json5
 import logging
 from pathlib import Path
 from typing import Optional
@@ -59,11 +59,11 @@ def read_json(
         return out
 
     try:
-        raw = json.loads(text, object_pairs_hook=_pairs_hook)
-    except json.JSONDecodeError as exc:
+        raw = json5.loads(text, object_pairs_hook=_pairs_hook)
+    except ValueError as exc:
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-            error=f"Invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}",
+            error=f"Invalid JSON: {exc}",
         )
 
     if not isinstance(raw, dict):
@@ -126,11 +126,11 @@ def read_claude_json(
         return out
 
     try:
-        raw = json.loads(text, object_pairs_hook=_pairs_hook)
-    except json.JSONDecodeError as exc:
+        raw = json5.loads(text, object_pairs_hook=_pairs_hook)
+    except ValueError as exc:
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-            error=f"Invalid JSON at line {exc.lineno}: {exc.msg}",
+            error=f"Invalid JSON: {exc}",
         )
 
     if not isinstance(raw, dict):

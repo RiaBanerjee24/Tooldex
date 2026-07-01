@@ -32,6 +32,17 @@ def print_banner(server_count: int, tool_count: int, url: str) -> None:
     typer.echo("  " + "╚" + "═" * 50 + "╝\n")
 
 
+_CLIENT_DISPLAY = {
+    "antigravity_user":      "gemini (antigravity)",
+    "antigravity_project":   "gemini (antigravity)",
+    "mcp_json_bare_project": "mcp.json",
+    "agents_user":            "agents",
+    "agents_user_dotfile":    "agents",
+    "agents_project":         "agents",
+    "agents_project_dotfile": "agents",
+}
+
+
 def print_summary(
     config_result: ConfigDetectionResult,
     tool_results: list[ToolDiscoveryResult],
@@ -41,7 +52,7 @@ def print_summary(
     typer.echo(typer.style("Config files", bold=True))
     for src in config_result.sources:
         symbol, color = _status_symbol(src.status.value)
-        client = src.client.ljust(22)
+        client = _CLIENT_DISPLAY.get(src.client, src.client).ljust(22)
         summary = _source_line_summary(src)
         typer.echo(f"  {typer.style(symbol, fg=color)}  {client} {summary}")
         if src.error:

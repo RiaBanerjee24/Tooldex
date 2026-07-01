@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from tooldex.core.discovery._paths import (
+    antigravity_user_path,
     build_plan,
     claude_code_project_path,
     codex_project_path,
@@ -99,6 +100,9 @@ class TestProjectPathResolvers:
         (project / ".mcp.json").write_text("{}")
         assert mcp_json_project_path(project) == project / ".mcp.json"
 
+    def test_antigravity_user_path(self, fake_home):
+        assert antigravity_user_path() == fake_home / ".gemini" / "antigravity" / "mcp_config.json"
+
 
 class TestBuildPlan:
     def test_returns_expected_client_ids(self, fake_home):
@@ -112,6 +116,12 @@ class TestBuildPlan:
             "cursor_user",
             "mcp_json_project",
             "mcp_json_user",
+            "mcp_json_bare_project",
+            "agents_project",
+            "agents_project_dotfile",
+            "agents_user",
+            "agents_user_dotfile",
+            "antigravity_user",
         ]
 
     def test_resolvers_are_callable(self, fake_home):

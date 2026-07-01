@@ -1,13 +1,13 @@
 # Tooldex
 
-Tooldex autodiscovers MCP servers configured across your AI clients - Claude Code, Cursor, Codex, Docker MCP Toolkit, and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Gemini (Antigravity), Agents, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
 
 ---
 
 ## Requirements
 
 - Python 3.10 or later
-- At least one supported MCP client configured (Claude Code, Cursor, Codex, or Docker MCP Toolkit)
+- At least one supported MCP client configured (Claude Code, Cursor, Codex, Gemini, or Docker MCP Toolkit)
 
 ---
 
@@ -99,18 +99,36 @@ Tooldex checks all of the following on every run. Files that do not exist are sk
 |---|---|
 | Global | `~/.mcp.json` |
 | Project | `<project>/.mcp.json` |
+| Project (bare) | `<project>/mcp.json` |
+
+### Agents
+
+| Scope | Path |
+|---|---|
+| Global | `~/.agents/mcp.json` |
+| Global | `~/.agents/.mcp.json` |
+| Project | `<project>/.agents/mcp.json` |
+| Project | `<project>/.agents/.mcp.json` |
+
+### Gemini (Antigravity IDE)
+
+| Scope | Path |
+|---|---|
+| Global | `~/.gemini/antigravity/mcp_config.json` |
 
 ### Docker MCP Toolkit
 
 Tooldex reads all Docker MCP profiles via `docker mcp profile ls`. No additional configuration is needed.
 
-Project-scoped paths are discovered by walking up the directory tree from `cwd` until the home directory.
+Project-scoped paths are discovered by walking up the directory tree from `cwd` until the home directory. Both `mcp.json` and `.mcp.json` are checked at every level of the walk.
 
 ---
 
 ## MCP Config Format
 
 All JSON-based clients use the same `mcpServers` structure. Tooldex understands both `stdio` (command-based) and `http`/`sse` (URL-based) transports.
+
+**Comments are supported.** Tooldex parses JSON5, so `//` line comments and `/* block */` comments in config files are handled gracefully.
 
 ### stdio server
 
@@ -331,22 +349,34 @@ All subprocess calls pass `stdin=subprocess.DEVNULL` to prevent interactive perm
 
 ### Adding a New MCP Client
 
-**1. Add path resolvers** in `_paths.py`:
+**1. Add path resolvers** in `_paths.py` and register in `CLIENT_PRIORITY`:
 
 ```python
 def windsurf_user_path() -> Path:
     return Path.home() / ".windsurf" / "mcp.json"
+
+def windsurf_project_path(cwd: Path) -> Optional[Path]:
+    return walk_up_for(cwd, (".windsurf", "mcp.json"))
 ```
 
 **2. Register in `build_plan()`**:
 
 ```python
-("windsurf_user", windsurf_user_path),
+("windsurf_project", lambda: windsurf_project_path(cwd)),
+("windsurf_user",    windsurf_user_path),
 ```
 
-**3. Add a status enrichment module** (optional) — follow the pattern of `_status_cursor.py` and add a call site in `detect_all()`.
+**3. Wire up the UI** — add to `CLIENT_META` and `GROUP_ORDER` in `Servers.jsx`, then rebuild:
 
-**4. Add an agent CLI fallback** (optional) in `mcp_client.py`:
+```bash
+cd tooldex/ui && npm run build
+```
+
+**4. Add CLI display names** in `_cli_output.py` if the raw client ID is not user-friendly.
+
+**5. Add a status enrichment module** (optional) — follow the pattern of `_status_cursor.py` and add a call site in `detect_all()`.
+
+**6. Add an agent CLI fallback** (optional) in `mcp_client.py`:
 
 ```python
 _AGENT_FALLBACK_CMDS = {

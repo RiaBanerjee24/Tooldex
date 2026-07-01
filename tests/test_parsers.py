@@ -95,6 +95,18 @@ class TestParseMcpServers:
         servers = parse_mcp_servers(raw, "/cfg.json", env={})
         assert servers[0].transport == "http"
 
+    def test_parses_antigravity_server_url_field(self):
+        raw = {"mcpServers": {"antimetal": {"serverUrl": "https://mcp.antimetal.com", "headers": {}}}}
+        servers = parse_mcp_servers(raw, "/cfg.json", env={})
+        assert len(servers) == 1
+        assert servers[0].url == "https://mcp.antimetal.com"
+        assert servers[0].transport == "http"
+
+    def test_url_takes_precedence_over_server_url(self):
+        raw = {"mcpServers": {"s": {"url": "https://standard.example.com", "serverUrl": "https://other.example.com"}}}
+        servers = parse_mcp_servers(raw, "/cfg.json", env={})
+        assert servers[0].url == "https://standard.example.com"
+
     def test_missing_key_returns_empty(self):
         assert parse_mcp_servers({}, "/cfg.json", env={}) == []
 
