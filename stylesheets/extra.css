@@ -1,0 +1,63 @@
+:root,
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:        #0d1117;
+  --md-primary-fg-color--light: #161b22;
+  --md-primary-fg-color--dark:  #0a0d14;
+  --md-accent-fg-color:         #bed754;
+  --md-default-bg-color:        #0d1117;
+  --md-default-fg-color:        #e6edf3;
+  --md-default-fg-color--light: #8b949e;
+  --md-typeset-a-color:         #bed754;
+}
+
+/* Sidebar background */
+.md-sidebar {
+  background-color: #0a0d14;
+}
+
+/* Nav links */
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: #bed754;
+}
+
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+/* Code blocks */
+.md-typeset code {
+  background-color: #161b22;
+  color: #e6edf3;
+}
+
+.highlight pre {
+  background-color: #0d1117 !important;
+}
+
+/* Header */
+.md-header {
+  background-color: #0a0d14;
+  border-bottom: 1px solid #1a1f2e;
+}
+
+/* TOC active item */
+.md-nav--secondary .md-nav__link--active {
+  color: #bed754;
+}
+
+/* Tables */
+.md-typeset table:not([class]) th {
+  background-color: #161b22;
+  color: #e6edf3;
+}
+
+.md-typeset table:not([class]) tr:nth-child(even) {
+  background-color: #0d1117;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0d14; }
+::-webkit-scrollbar-thumb { background: #2d333b; border-radius: 3px; }
