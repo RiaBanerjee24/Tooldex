@@ -9,6 +9,7 @@ export function SecurityWarningIcon({ size = 14, color = "currentColor" }) {
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             style={{ flexShrink: 0, display: "block" }}
+
         >
             {/* filled triangle */}
             <path

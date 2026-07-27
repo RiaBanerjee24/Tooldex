@@ -107,6 +107,52 @@ function RescanServerButton({ serverId, onDone }) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-server LLM-as-judge button — scoped to one server, throttled tool-by-
+// tool server-side to avoid bursting the LLM provider's rate limit.
+// ---------------------------------------------------------------------------
+
+function LlmScanServerButton({ serverId, onDone }) {
+    const [state, setState] = useState("idle") // idle | scanning | done | error
+    const [errMsg, setErrMsg] = useState("")
+
+    const handleClick = async () => {
+        if (state === "scanning") return
+        setState("scanning")
+        try {
+            await api.llmScanServer(serverId)
+            setState("done")
+            onDone?.()
+            setTimeout(() => setState("idle"), 2000)
+        } catch (e) {
+            setErrMsg(e.message || "")
+            setState("error")
+            setTimeout(() => setState("idle"), 3000)
+        }
+    }
+
+    const label = state === "scanning" ? "judging…"
+        : state === "done" ? "done ✓"
+        : state === "error" ? (errMsg.includes("not configured") ? "no llm key ✗" : "failed ✗")
+        : "run llm judge"
+    const color = state === "done" ? "var(--lime)"
+        : state === "error" ? "var(--red)"
+        : "var(--text3)"
+
+    return (
+        <button onClick={handleClick} title="Run the LLM-as-judge analyzer for this server only, one tool at a time" style={{
+            padding: "5px 12px", background: "var(--surface2)",
+            border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+            cursor: state === "scanning" ? "default" : "pointer", fontSize: 10,
+            color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+            transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
+            opacity: state === "scanning" ? 0.7 : 1,
+        }}>
+            {label}
+        </button>
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Rescan all button (header level)
 // ---------------------------------------------------------------------------
 
@@ -294,6 +340,7 @@ const _SEV_FILTER_LEVELS = ["HIGH", "MEDIUM", "LOW"]
 function ToolFindingsPanel({ findings }) {
     const [sortDir, setSortDir] = useState(null)
     const [sevFilter, setSevFilter] = useState(new Set())
+    const [tagFilter, setTagFilter] = useState(new Set())
     const [sortOpen, setSortOpen] = useState(false)
     const [sevOpen, setSevOpen] = useState(false)
     const sortRef = useRef(null)
@@ -311,6 +358,10 @@ function ToolFindingsPanel({ findings }) {
     const displayed = (() => {
         let list = findings
         if (sevFilter.size > 0) list = list.filter(f => sevFilter.has(f.severity?.toUpperCase()))
+        if (tagFilter.size > 0) list = list.filter(f => {
+            const label = (f.threat_category || f.analyzer || "").toUpperCase()
+            return tagFilter.has(label)
+        })
         if (sortDir === "desc") list = [...list].sort((a, b) => (_SEV_RANK[a.severity?.toUpperCase()] ?? 99) - (_SEV_RANK[b.severity?.toUpperCase()] ?? 99))
         if (sortDir === "asc")  list = [...list].sort((a, b) => (_SEV_RANK[b.severity?.toUpperCase()] ?? 99) - (_SEV_RANK[a.severity?.toUpperCase()] ?? 99))
         return list
@@ -341,8 +392,58 @@ function ToolFindingsPanel({ findings }) {
         color: "var(--text2)", userSelect: "none",
     }
 
+    // Collect unique issue tags — prefer threat_category, fall back to analyzer.
+    // Color each tag by the worst severity that carries that label.
+    const tags = (() => {
+        const map = {}
+        for (const f of findings) {
+            const label = (f.threat_category || f.analyzer || "").toUpperCase()
+            if (!label) continue
+            const rank = _SEV_RANK[f.severity?.toUpperCase()] ?? 99
+            if (!(label in map) || rank < map[label].rank) {
+                map[label] = { label, rank, color: securityRiskColor(f.severity) }
+            }
+        }
+        return Object.values(map).sort((a, b) => a.rank - b.rank)
+    })()
+
     return (
         <div style={{ marginTop: 6 }}>
+            {/* issue tags */}
+            {tags.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+                    {tags.map(t => {
+                        const active = tagFilter.has(t.label)
+                        return (
+                            <button
+                                key={t.label}
+                                onClick={() => setTagFilter(prev => {
+                                    const next = new Set(prev)
+                                    next.has(t.label) ? next.delete(t.label) : next.add(t.label)
+                                    return next
+                                })}
+                                style={{
+                                    padding: "2px 8px",
+                                    borderRadius: 99,
+                                    fontSize: 9,
+                                    fontFamily: "Menlo, Consolas, monospace",
+                                    letterSpacing: "0.06em",
+                                    textTransform: "uppercase",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    color: t.color,
+                                    background: active
+                                        ? `color-mix(in srgb, ${t.color} 22%, var(--surface3))`
+                                        : `color-mix(in srgb, ${t.color} 10%, var(--surface2))`,
+                                    border: `1px solid color-mix(in srgb, ${t.color} ${active ? "60%" : "25%"}, transparent)`,
+                                    transition: "all 0.12s",
+                                    outline: "none",
+                                }}
+                            >{t.label}</button>
+                        )
+                    })}
+                </div>
+            )}
             {/* controls row */}
             <div style={{ display: "flex", gap: 5, marginBottom: 7 }}>
                 {/* Sort */}
@@ -1216,6 +1317,9 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                                         <ConnectionStatusBadge status={effectiveStatus(detail)} />
                                         <RescanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
+                                        {detail.discovered_tools?.length > 0 && (
+                                            <LlmScanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
+                                        )}
                                         <CopyConfigButton detail={detail} />
                                     </div>
                                 </div>

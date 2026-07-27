@@ -14,7 +14,10 @@ async function get(path) {
 
 async function post(path) {
     const res = await fetch(`${BASE}${path}`, { method: "POST" })
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${path}`)
+    if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || body?.detail?.error || `${res.status} ${res.statusText} — ${path}`)
+    }
     return res.json()
 }
 
@@ -29,4 +32,5 @@ export const api = {
     engineRaw: (id) => get(`/api/policy/engines/${id}/raw`),
     rescan: () => post("/api/rescan"),
     rescanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/rescan`),
+    llmScanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan`),
 }

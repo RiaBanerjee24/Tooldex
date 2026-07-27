@@ -129,3 +129,58 @@ async def rescan_server(server_id: str):
         "error": result.error,
         "duration_ms": result.duration_ms,
     }
+
+
+@router.post("/servers/{server_id}/llm-scan")
+async def llm_scan_server(server_id: str):
+    """
+    Run the LLM-as-judge analyzer for a single server, one tool at a time.
+
+    Opt-in and separate from the free YARA scan that runs on every rescan —
+    requires MCP_SCANNER_LLM_API_KEY. Scoped to one server (rather than the
+    fleet-wide rescan) and throttled tool-by-tool to avoid bursting the LLM
+    provider's rate limit.
+    """
+    from tooldex.scanner import scan_server_llm_judge
+    from tooldex.core.discovery.to_manifest import _security_data, _SEVERITY_RANK
+
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
+
+    if not server.discovered_tools:
+        raise HTTPException(status_code=400, detail={"error": "No discovered tools to scan"})
+
+    try:
+        scan_results = await asyncio.to_thread(scan_server_llm_judge, server)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"error": str(e)})
+
+    llm_findings, _ = _security_data(scan_results)
+
+    # Re-fetch in case a full rescan replaced the manifest while this ran.
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found after scan"})
+
+    # Merge with existing findings, replacing only this analyzer's prior results.
+    merged = [f for f in server.security_findings if f.get("analyzer") != "LLM"] + llm_findings
+    worst = min(
+        (f["severity"] for f in merged),
+        key=lambda s: _SEVERITY_RANK.get(s.upper(), 99),
+        default=None,
+    )
+
+    manifest.servers[server_id] = server.model_copy(update={
+        "security_findings": merged,
+        "security_risk": worst,
+        "security_scanned": True,
+    })
+
+    return {
+        "status": "ok",
+        "findings_count": len(llm_findings),
+        "security_risk": worst,
+    }
