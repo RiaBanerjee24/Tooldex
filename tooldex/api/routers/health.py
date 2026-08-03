@@ -84,12 +84,14 @@ async def rescan(request: Request):
 
 
 @router.get("/rescan/stream")
-async def rescan_stream():
+async def rescan_stream(force: bool = False):
     """
-    Stream rescan results as Server-Sent Events — one event per server as it
-    completes, then a final done event.
+    Stream rescan results as Server-Sent Events, one per server, then a done
+    event. Blocked while any LLM-judge job is running unless force=true, in
+    which case those jobs are aborted first.
 
     Event shapes:
+      {"type": "blocked", "servers": ["..."]}
       {"type": "result", "server_id": "...", "status": "found"|"...",
        "tool_count": N, "error": null|"...", "duration_ms": N}
       {"type": "done", "total": N, "duration_ms": N}
@@ -97,11 +99,19 @@ async def rescan_stream():
     from tooldex.core.discovery.mcp_client import probe_server
     from tooldex.core.parsers.parser import get_parser
     from tooldex.core.models.server import DiscoveredToolLite
-
-    manifest = get_parser().manifest
-    servers = list(manifest.servers.values())
+    from tooldex.api.routers.servers import running_llm_job_ids, abort_all_llm_jobs
 
     async def generate():
+        running = running_llm_job_ids()
+        if running and not force:
+            yield f"data: {_json.dumps({'type': 'blocked', 'servers': running})}\n\n"
+            return
+        if running:
+            await abort_all_llm_jobs()
+
+        manifest = get_parser().manifest
+        servers = list(manifest.servers.values())
+
         if not servers:
             yield f"data: {_json.dumps({'type': 'done', 'total': 0, 'duration_ms': 0})}\n\n"
             return

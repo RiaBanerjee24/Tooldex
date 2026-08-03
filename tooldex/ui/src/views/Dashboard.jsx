@@ -6,7 +6,7 @@ function RescanButton({ onRescan, rescanState, rescanSeconds }) {
     const borderColor = rescanState === "scanning" ? "var(--yellow-muted)" : "var(--border2)"
 
     return (
-        <button onClick={onRescan} style={{
+        <button onClick={() => onRescan()} style={{
             padding: "6px 14px", background: "var(--surface2)",
             border: `1px solid ${borderColor}`,
             borderRadius: "var(--radius)", cursor: rescanState === "scanning" ? "default" : "pointer",

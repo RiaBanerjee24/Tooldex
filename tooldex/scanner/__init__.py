@@ -1,50 +1,35 @@
 """
 tooldex/scanner/__init__.py
 
-Security scanning integration using the Cisco AI Defense MCP Scanner.
+Security scanning integration using Cisco's mcpscanner library.
 
-The free analyzer (YARA) runs automatically on every `tooldex run` with no
-configuration needed. It pattern-matches actual attack payloads (instruction
-overrides, hidden-instruction evasion, privilege escalation strings) in tool
-descriptions and output, so a finding means suspicious content is actually
-present.
+YARA runs automatically on every scan. VirusTotal and the LLM judge are
+opt-in via env vars; the LLM judge additionally only runs per-server via
+run_llm_judge_scan, never automatically.
 
-Prompt Defense and Readiness are excluded from the default set: both flag
-the *absence* of specific boilerplate wording rather than the presence of
-any actual issue, so they produce a HIGH/MEDIUM on nearly every real-world
-tool regardless of risk and aren't actionable for servers you don't control.
-
-Opt-in analyzers activate when the relevant env vars are present:
-  MCP_SCANNER_API_KEY                — enables Cisco AI Defense cloud analysis
+Env vars:
   VIRUSTOTAL_API_KEY                 — enables VirusTotal binary/package scanning
   MCP_SCANNER_CONCURRENCY            — max servers scanned in parallel (default: 8)
-
-LLM-as-judge is opt-in and per-server only — it does NOT run automatically
-on `tooldex run` or a fleet-wide rescan, even when MCP_SCANNER_LLM_API_KEY is
-set. mcpscanner's bulk scan fires every tool on a server through the LLM
-concurrently with no cap, so running it automatically across an entire
-fleet (potentially hundreds of tools) reliably bursts through provider rate
-limits and stalls for a long time retrying silently. Setting the LLM env
-vars only unlocks the "run llm judge" button per server (see
-scan_server_llm_judge below), which scans that server's tools one at a time:
-  MCP_SCANNER_LLM_API_KEY            — enables the per-server LLM judge button
-  MCP_SCANNER_LLM_MODEL              — model to use (e.g. gpt-4o, claude-3-5-sonnet)
-  MCP_SCANNER_LLM_RATE_LIMIT_DELAY   — seconds between LLM calls (default: 2.0)
-  MCP_SCANNER_LLM_TEMPERATURE        — sampling temperature (default: 1.0 — mcpscanner
-                                        defaults to 0.1, which reasoning-tier models like
-                                        gpt-5.6-terra/sol reject outright with a 400;
-                                        1.0 is accepted by both classic and reasoning models)
+  TOOLDEX_LLM_API_KEY                — enables the per-server LLM judge
+  TOOLDEX_LLM_MODEL                  — model to use (e.g. gpt-4o, claude-3-5-sonnet)
+  TOOLDEX_LLM_RATE_LIMIT_DELAY       — seconds between LLM calls (default: 2.0)
+  TOOLDEX_LLM_TEMPERATURE            — sampling temperature (default: 1.0)
+  TOOLDEX_LLM_MAX_RETRIES            — max retries on a failed LLM call (default: 6)
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Callable
 
 from mcpscanner import Config, Scanner
-from mcpscanner.core.models import AnalyzerEnum, ToolScanResult
+from mcpscanner.core.models import AnalyzerEnum
+from mcpscanner.core.result import ToolScanResult
 from mcpscanner.core.scanner import StdioServer
+
+from tooldex.scanner import llm_cache
 
 if TYPE_CHECKING:
     from tooldex.core.models.server import MCPServer
@@ -73,13 +58,12 @@ _silence_llm_loggers()
 
 
 def _build_config() -> Config:
-    rate_limit_delay = float(os.getenv("MCP_SCANNER_LLM_RATE_LIMIT_DELAY", "2.0"))
-    max_retries = int(os.getenv("MCP_SCANNER_LLM_MAX_RETRIES", "6"))
-    temperature = float(os.getenv("MCP_SCANNER_LLM_TEMPERATURE", "1.0"))
+    rate_limit_delay = float(os.getenv("TOOLDEX_LLM_RATE_LIMIT_DELAY", "2.0"))
+    max_retries = int(os.getenv("TOOLDEX_LLM_MAX_RETRIES", "6"))
+    temperature = float(os.getenv("TOOLDEX_LLM_TEMPERATURE", "1.0"))
     return Config(
-        api_key=os.getenv("MCP_SCANNER_API_KEY"),
-        llm_provider_api_key=os.getenv("MCP_SCANNER_LLM_API_KEY"),
-        llm_model=os.getenv("MCP_SCANNER_LLM_MODEL"),
+        llm_provider_api_key=os.getenv("TOOLDEX_LLM_API_KEY"),
+        llm_model=os.getenv("TOOLDEX_LLM_MODEL"),
         llm_rate_limit_delay=rate_limit_delay,
         llm_max_retries=max_retries,
         llm_temperature=temperature,
@@ -88,16 +72,10 @@ def _build_config() -> Config:
 
 
 def active_analyzers(config: Config | None = None) -> list[AnalyzerEnum]:
-    """
-    Analyzers used by the automatic fleet-wide scan (scan_servers). Deliberately
-    excludes LLM/BEHAVIORAL regardless of whether an LLM key is configured —
-    see the module docstring for why. Those only run via scan_server_llm_judge.
-    """
+    """Analyzers used by the automatic fleet-wide scan (scan_servers)."""
     if config is None:
         config = _build_config()
     analyzers = list(_FREE_ANALYZERS)
-    if config.api_key:
-        analyzers.append(AnalyzerEnum.API)
     if config.virustotal_api_key:
         analyzers.append(AnalyzerEnum.VIRUSTOTAL)
     return analyzers
@@ -142,9 +120,6 @@ async def _scan_all_async(
     config = _build_config()
     scanner = Scanner(config)
     analyzers = active_analyzers(config)
-
-    # No LLM analyzer in this path (see active_analyzers), so there's no
-    # provider rate limit to protect — just cap parallel server scans.
     concurrency = int(os.getenv("MCP_SCANNER_CONCURRENCY", "8"))
     sem = asyncio.Semaphore(concurrency)
 
@@ -164,72 +139,132 @@ async def _scan_all_async(
 def scan_servers(
     servers: dict[str, MCPServer],
 ) -> dict[str, list[ToolScanResult]]:
-    """
-    Run the security scan on a set of already-probed servers.
-    Returns server_id → list of per-tool scan results.
-    """
+    """Run the security scan on a set of already-probed servers. Returns server_id -> results."""
     if not servers:
         return {}
     return asyncio.run(_scan_all_async(servers))
 
 
-async def _scan_llm_judge_async(server: MCPServer) -> list[ToolScanResult]:
+async def _race_cancel(coro, cancel_event: asyncio.Event | None):
+    """Run `coro` to completion, or cancel it immediately if `cancel_event` fires first."""
+    task = asyncio.ensure_future(coro)
+    if cancel_event is None:
+        return await task
+    waiter = asyncio.ensure_future(cancel_event.wait())
+    try:
+        done, _ = await asyncio.wait({task, waiter}, return_when=asyncio.FIRST_COMPLETED)
+        if task in done:
+            return task.result()
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+        return None
+    finally:
+        if not waiter.done():
+            waiter.cancel()
+
+
+async def run_llm_judge_scan(
+    server: MCPServer,
+    on_progress: Callable[[int, int], None] | None = None,
+    cancel_event: asyncio.Event | None = None,
+) -> list[ToolScanResult]:
+    """
+    Run the LLM-as-judge analyzer over one server's tools, one at a time
+    (throttled by `TOOLDEX_LLM_RATE_LIMIT_DELAY`), checking llm_cache
+    first so unchanged tools reuse their last verdict instead of re-calling
+    the LLM. `on_progress(scanned, total)` fires after each tool. `cancel_event`
+    stops the scan immediately (mid-delay or mid-call) and returns whatever
+    results were gathered so far.
+    """
     config = _build_config()
     if not config.llm_provider_api_key:
-        raise ValueError("MCP_SCANNER_LLM_API_KEY is not configured")
+        raise ValueError("TOOLDEX_LLM_API_KEY is not configured")
 
     scanner = Scanner(config)
     delay = config.llm_rate_limit_delay
-    tool_names = [t.name for t in server.discovered_tools]
-    if not tool_names:
+    tools = list(server.discovered_tools)
+    total = len(tools)
+    if not total:
         return []
 
     results: list[ToolScanResult] = []
-    total = len(tool_names)
-    print(f"[llm-judge] {server.name}: scanning {total} tool(s), ~{delay:.0f}s+ apart", flush=True)
+    made_first_call = False
+    print(f"[llm-judge] {server.name}: scanning {total} tool(s), ~{delay:.0f}s+ apart (unchanged tools reuse their cached verdict)", flush=True)
     devnull = open(os.devnull, "w")
     try:
-        for i, name in enumerate(tool_names):
-            if i > 0:
-                await asyncio.sleep(delay)
+        for i, tool in enumerate(tools):
+            name = tool.name
+            if cancel_event is not None and cancel_event.is_set():
+                print(f"[llm-judge] {server.name}: stopped at {i}/{total}", flush=True)
+                break
+
+            h = llm_cache.tool_hash(tool.name, tool.description, tool.input_schema)
+            cached = llm_cache.get_cached(server.id, name, h)
+            if cached is not None:
+                print(f"[llm-judge] {server.name}: [{i + 1}/{total}] {name} — cached, unchanged", flush=True)
+                results.append(SimpleNamespace(
+                    tool_name=name,
+                    is_safe=cached["is_safe"],
+                    findings=[SimpleNamespace(**f) for f in cached["findings"]],
+                ))
+                if on_progress:
+                    on_progress(i + 1, total)
+                continue
+
+            if made_first_call:
+                if await _race_cancel(asyncio.sleep(delay), cancel_event) is None and cancel_event is not None and cancel_event.is_set():
+                    print(f"[llm-judge] {server.name}: stopped at {i}/{total}", flush=True)
+                    break
+            made_first_call = True
+
             print(f"[llm-judge] {server.name}: [{i + 1}/{total}] {name} …", flush=True)
+            if server.transport == "stdio" and server.command:
+                env = {**os.environ, **(server.env or {})}
+                stdio_cfg = StdioServer(
+                    command=server.command,
+                    args=server.args or [],
+                    env=env,
+                )
+                scan_coro = scanner.scan_stdio_server_tool(
+                    stdio_cfg, name, analyzers=[AnalyzerEnum.LLM], errlog=devnull
+                )
+            elif server.url:
+                scan_coro = scanner.scan_remote_server_tool(
+                    server.url, name, analyzers=[AnalyzerEnum.LLM]
+                )
+            else:
+                print(f"[llm-judge] {server.name}: [{i + 1}/{total}] {name} — skipped (no command/url)", flush=True)
+                if on_progress:
+                    on_progress(i + 1, total)
+                continue
+
             try:
-                if server.transport == "stdio" and server.command:
-                    env = {**os.environ, **(server.env or {})}
-                    stdio_cfg = StdioServer(
-                        command=server.command,
-                        args=server.args or [],
-                        env=env,
-                    )
-                    result = await scanner.scan_stdio_server_tool(
-                        stdio_cfg, name, analyzers=[AnalyzerEnum.LLM], errlog=devnull
-                    )
-                elif server.url:
-                    result = await scanner.scan_remote_server_tool(
-                        server.url, name, analyzers=[AnalyzerEnum.LLM]
-                    )
-                else:
-                    print(f"[llm-judge] {server.name}: [{i + 1}/{total}] {name} — skipped (no command/url)", flush=True)
-                    continue
+                result = await _race_cancel(scan_coro, cancel_event)
             except Exception as e:
                 print(f"[llm-judge] {server.name}: [{i + 1}/{total}] {name} — FAILED: {e}", flush=True)
-                continue
-            results.append(result)
+                result = None
+            if result is None and cancel_event is not None and cancel_event.is_set():
+                print(f"[llm-judge] {server.name}: stopped mid-scan at [{i + 1}/{total}] {name}", flush=True)
+                break
+            if result is not None:
+                results.append(result)
+                flat_findings = [
+                    {
+                        "severity": f.severity,
+                        "summary": f.summary,
+                        "analyzer": f.analyzer,
+                        "threat_category": f.threat_category,
+                    }
+                    for f in result.findings
+                ]
+                llm_cache.put_cached(server.id, name, h, flat_findings, result.is_safe)
+            if on_progress:
+                on_progress(i + 1, total)
     finally:
         devnull.close()
 
     print(f"[llm-judge] {server.name}: done — {len(results)}/{total} tools scanned", flush=True)
     return results
-
-
-def scan_server_llm_judge(server: MCPServer) -> list[ToolScanResult]:
-    """
-    Run the LLM-as-judge analyzer over one server's tools, one tool at a time.
-
-    mcpscanner's bulk scan (scan_stdio_server_tools / scan_remote_server_tools)
-    fires every tool on a server through the LLM concurrently with no cap —
-    a 20-tool server means 20 simultaneous LLM calls, which is what trips
-    provider rate limits. Scanning tool-by-tool with a delay between calls
-    guarantees at most one in-flight LLM request at a time.
-    """
-    return asyncio.run(_scan_llm_judge_async(server))

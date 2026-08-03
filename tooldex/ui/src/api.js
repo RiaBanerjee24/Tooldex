@@ -31,6 +31,8 @@ export const api = {
     engines: () => get("/api/policy/engines"),
     engineRaw: (id) => get(`/api/policy/engines/${id}/raw`),
     rescan: () => post("/api/rescan"),
-    rescanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/rescan`),
+    rescanServer: (id, force = false) => post(`/api/servers/${encodeURIComponent(id)}/rescan${force ? "?force=true" : ""}`),
     llmScanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan`),
+    llmScanStatus: (id) => get(`/api/servers/${encodeURIComponent(id)}/llm-scan/status`),
+    llmScanStop: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/stop`),
 }

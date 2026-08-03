@@ -61,3 +61,5 @@ class MCPServer(BaseModel):
     # True only when this server was actually included in a scan run.
     # Distinguishes "scanned and clean" from "never scanned".
     security_scanned: bool = False
+    # UTC ISO timestamp of the last LLM-judge scan for this server, if any.
+    security_llm_scanned_at: Optional[str] = None

@@ -31,6 +31,48 @@ export function SecurityWarningIcon({ size = 14, color = "currentColor" }) {
     )
 }
 
+export function GearIcon({ size = 14, color = "currentColor", spinning = false }) {
+    const teeth = Array.from({ length: 8 })
+    return (
+        <svg
+            width={size} height={size}
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{
+                flexShrink: 0, display: "block",
+                animation: spinning ? "spin 0.9s linear infinite" : "none",
+                transformOrigin: "50% 50%",
+            }}
+        >
+            {teeth.map((_, i) => (
+                <rect
+                    key={i}
+                    x="7.15" y="0.6" width="1.7" height="2.9" rx="0.6"
+                    fill={color}
+                    transform={`rotate(${i * 45} 8 8)`}
+                />
+            ))}
+            <circle cx="8" cy="8" r="4.2" fill={color} opacity="0.16" />
+            <circle cx="8" cy="8" r="4.2" stroke={color} strokeWidth="1.2" />
+            <circle cx="8" cy="8" r="1.3" fill={color} />
+        </svg>
+    )
+}
+
+export function StopSquareIcon({ size = 10, color = "var(--red)" }) {
+    return (
+        <svg
+            width={size} height={size}
+            viewBox="0 0 12 12"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ flexShrink: 0, display: "block" }}
+        >
+            <rect x="0.5" y="0.5" width="11" height="11" rx="1.5" fill={color} />
+        </svg>
+    )
+}
+
 export function SecurityCleanIcon({ size = 14, color = "currentColor" }) {
     return (
         <svg

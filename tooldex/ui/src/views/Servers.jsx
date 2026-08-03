@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { api } from "../api.js"
 import { useFetch } from "../hooks/useFetch.js"
 import {
     Card, CardHead, Empty, Spinner, Err, SidebarBtn, ProvenanceDot,
 } from "../components/ui.jsx"
-import { SecurityWarningIcon, SecurityCleanIcon } from "../assets/icons.jsx"
+import { SecurityWarningIcon, SecurityCleanIcon, GearIcon, StopSquareIcon } from "../assets/icons.jsx"
 import { DownloadReport } from "../components/DownloadReport.jsx"
 
 // ---------------------------------------------------------------------------
@@ -68,61 +69,168 @@ function CopyConfigButton({ detail }) {
 // ---------------------------------------------------------------------------
 
 function RescanServerButton({ serverId, onDone }) {
-    const [state, setState] = useState("idle") // idle | scanning | done | error
+    const [state, setState] = useState("idle") // idle | scanning | done | error | blocked
+    const [pos, setPos] = useState(null)
+    const btnRef = useRef(null)
+    const popRef = useRef(null)
 
-    const handleClick = async () => {
-        if (state === "scanning") return
+    const doRescan = async (force) => {
         setState("scanning")
         try {
-            await api.rescanServer(serverId)
+            await api.rescanServer(serverId, force)
             setState("done")
             onDone?.()
             setTimeout(() => setState("idle"), 2000)
-        } catch {
+        } catch (e) {
+            if (e.message === "llm_scan_running") {
+                const r = btnRef.current?.getBoundingClientRect()
+                if (r) setPos({ top: r.bottom + 8, left: r.left })
+                setState("blocked")
+                return
+            }
             setState("error")
             setTimeout(() => setState("idle"), 2500)
         }
     }
 
+    const handleClick = () => {
+        if (state === "scanning") return
+        doRescan(false)
+    }
+
+    useEffect(() => {
+        if (state !== "blocked") return
+        function handleClick(e) {
+            if (popRef.current && !popRef.current.contains(e.target) && !btnRef.current?.contains(e.target)) {
+                setState("idle")
+            }
+        }
+        document.addEventListener("mousedown", handleClick)
+        return () => document.removeEventListener("mousedown", handleClick)
+    }, [state])
+
     const label = state === "scanning" ? "scanning…"
         : state === "done" ? "done ✓"
         : state === "error" ? "failed ✗"
+        : state === "blocked" ? "blocked ⚠"
         : "rescan server"
     const color = state === "done" ? "var(--lime)"
         : state === "error" ? "var(--red)"
+        : state === "blocked" ? "var(--yellow-muted)"
         : "var(--text3)"
 
     return (
-        <button onClick={handleClick} style={{
-            padding: "5px 12px", background: "var(--surface2)",
-            border: "1px solid var(--border2)", borderRadius: "var(--radius)",
-            cursor: state === "scanning" ? "default" : "pointer", fontSize: 10,
-            color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
-            transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
-            opacity: state === "scanning" ? 0.7 : 1,
-        }}>
-            {label}
-        </button>
+        <>
+            <button ref={btnRef} onClick={handleClick} style={{
+                padding: "5px 12px", background: "var(--surface2)",
+                border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+                cursor: state === "scanning" ? "default" : "pointer", fontSize: 10,
+                color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+                transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
+                opacity: state === "scanning" ? 0.7 : 1,
+            }}>
+                {label}
+            </button>
+            {state === "blocked" && pos && createPortal(
+                <div ref={popRef} style={{
+                    position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
+                    width: 220, padding: "10px 12px", background: "var(--surface3)",
+                    border: "1px solid var(--yellow-muted)", borderRadius: "var(--radius)",
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
+                    fontSize: 10.5, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace",
+                    lineHeight: 1.5,
+                }}>
+                    AI security scan is running for this server. Rescanning now will abort it mid-scan.
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 10 }}>
+                        <button
+                            onClick={() => setState("idle")}
+                            style={{
+                                padding: "4px 9px", background: "var(--surface2)",
+                                border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+                                cursor: "pointer", fontSize: 10, color: "var(--text3)",
+                                fontFamily: "Menlo, Consolas, monospace",
+                            }}
+                        >
+                            cancel
+                        </button>
+                        <button
+                            onClick={() => doRescan(true)}
+                            style={{
+                                padding: "4px 9px", background: "var(--red-bg)",
+                                border: "1px solid var(--red-border)", borderRadius: "var(--radius)",
+                                cursor: "pointer", fontSize: 10, color: "var(--red)",
+                                fontFamily: "Menlo, Consolas, monospace",
+                            }}
+                        >
+                            force rescan
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </>
     )
 }
 
 // ---------------------------------------------------------------------------
-// Per-server LLM-as-judge button — scoped to one server, throttled tool-by-
-// tool server-side to avoid bursting the LLM provider's rate limit.
+// Per-server LLM-as-judge button
 // ---------------------------------------------------------------------------
 
-function LlmScanServerButton({ serverId, onDone }) {
-    const [state, setState] = useState("idle") // idle | scanning | done | error
+function LlmScanServerButton({ serverId, onDone, lastScannedAt }) {
+    const [state, setState] = useState("idle") // idle | running | done | stopped | error
     const [errMsg, setErrMsg] = useState("")
+    const [progress, setProgress] = useState({ scanned: 0, total: 0 })
+    const [hover, setHover] = useState(false)
+    const [pressed, setPressed] = useState(false)
+    const [pos, setPos] = useState(null)
+    const [lastScannedRel, setLastScannedRel] = useState(() => formatRelativeTime(lastScannedAt))
+    const btnRef = useRef(null)
+    const pollRef = useRef(null)
+
+    useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+    useEffect(() => {
+        setLastScannedRel(formatRelativeTime(lastScannedAt))
+        if (!lastScannedAt) return
+        const id = setInterval(() => setLastScannedRel(formatRelativeTime(lastScannedAt)), 30_000)
+        return () => clearInterval(id)
+    }, [lastScannedAt])
+
+    const stopPolling = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
+
+    const startPolling = () => {
+        pollRef.current = setInterval(async () => {
+            let s
+            try {
+                s = await api.llmScanStatus(serverId)
+            } catch {
+                return // transient — try again next tick
+            }
+            setProgress(p => ({ scanned: s.scanned ?? p.scanned, total: s.total ?? p.total }))
+            if (s.status === "done" || s.status === "stopped") {
+                stopPolling()
+                setState(s.status)
+                onDone?.()
+                setTimeout(() => setState("idle"), 2000)
+            } else if (s.status === "error") {
+                stopPolling()
+                setErrMsg(s.error || "")
+                setState("error")
+                setTimeout(() => setState("idle"), 3000)
+            }
+        }, 800)
+    }
 
     const handleClick = async () => {
-        if (state === "scanning") return
-        setState("scanning")
+        if (state === "running") return
+        setState("running")
+        setProgress({ scanned: 0, total: 0 })
         try {
-            await api.llmScanServer(serverId)
-            setState("done")
-            onDone?.()
-            setTimeout(() => setState("idle"), 2000)
+            const res = await api.llmScanServer(serverId)
+            setProgress({ scanned: res.scanned || 0, total: res.total || 0 })
+            startPolling()
         } catch (e) {
             setErrMsg(e.message || "")
             setState("error")
@@ -130,25 +238,123 @@ function LlmScanServerButton({ serverId, onDone }) {
         }
     }
 
-    const label = state === "scanning" ? "judging…"
+    const handleStop = (e) => {
+        e.stopPropagation()
+        api.llmScanStop(serverId).catch(() => {})
+    }
+
+    const showTooltip = () => {
+        const r = btnRef.current?.getBoundingClientRect()
+        if (r) setPos({ top: r.top, left: r.left + r.width / 2 })
+        setHover(true)
+    }
+
+    const running = state === "running"
+    const label = running ? "judging"
         : state === "done" ? "done ✓"
+        : state === "stopped" ? "stopped ✓"
         : state === "error" ? (errMsg.includes("not configured") ? "no llm key ✗" : "failed ✗")
-        : "run llm judge"
+        : "AI security scan"
     const color = state === "done" ? "var(--lime)"
+        : state === "stopped" ? "var(--yellow-muted)"
         : state === "error" ? "var(--red)"
-        : "var(--text3)"
+        : hover ? "var(--cream)" : "var(--text3)"
 
     return (
-        <button onClick={handleClick} title="Run the LLM-as-judge analyzer for this server only, one tool at a time" style={{
-            padding: "5px 12px", background: "var(--surface2)",
-            border: "1px solid var(--border2)", borderRadius: "var(--radius)",
-            cursor: state === "scanning" ? "default" : "pointer", fontSize: 10,
-            color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
-            transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
-            opacity: state === "scanning" ? 0.7 : 1,
+        <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", gap: 3, flexShrink: 0 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            {running && (
+                <span style={{
+                    fontSize: 10, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace",
+                    letterSpacing: "0.03em", whiteSpace: "nowrap",
+                }}>
+                    tools scanned {progress.scanned}/{progress.total}
+                </span>
+            )}
+            <button
+                ref={btnRef}
+                onClick={handleClick}
+                onMouseEnter={showTooltip}
+                onMouseLeave={() => { setHover(false); setPressed(false) }}
+                onMouseDown={() => setPressed(true)}
+                onMouseUp={() => setPressed(false)}
+                style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "5px 12px",
+                    background: pressed
+                        ? "linear-gradient(180deg, var(--surface2), var(--surface3))"
+                        : hover
+                        ? "linear-gradient(180deg, #333333, var(--surface2))"
+                        : "linear-gradient(180deg, var(--surface3), var(--surface2))",
+                    borderTop: "1px solid rgba(255,255,255,0.1)",
+                    borderLeft: "1px solid rgba(255,255,255,0.06)",
+                    borderRight: "1px solid rgba(0,0,0,0.35)",
+                    borderBottom: "1px solid rgba(0,0,0,0.45)",
+                    borderRadius: "var(--radius)",
+                    cursor: running ? "default" : "pointer", fontSize: 10,
+                    color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
+                    transition: "color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s",
+                    whiteSpace: "nowrap", flexShrink: 0,
+                    opacity: running ? 0.9 : 1,
+                    transform: pressed ? "translateY(1px)" : hover ? "translateY(-1px)" : "none",
+                    boxShadow: pressed
+                        ? "inset 0 1px 3px rgba(0,0,0,0.5)"
+                        : hover
+                        ? "0 0 0 1px var(--lime-dim), 0 3px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)"
+                        : "0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 3px rgba(0,0,0,0.35)",
+                }}
+            >
+                {running && <GearIcon size={11} color="var(--text3)" spinning />}
+                {label}
+            </button>
+            {running && (
+                <button
+                    onClick={handleStop}
+                    title="Stop scan — keeps results collected so far"
+                    style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 20, height: 20, padding: 0, flexShrink: 0,
+                        background: "var(--red-bg)", border: "1px solid var(--red-border)",
+                        borderRadius: "var(--radius)", cursor: "pointer",
+                    }}
+                >
+                    <StopSquareIcon size={9} />
+                </button>
+            )}
+            {hover && pos && createPortal(
+                <div style={{
+                    position: "fixed", top: pos.top - 9, left: pos.left, transform: "translate(-50%, -100%)",
+                    padding: "7px 11px", background: "var(--surface3)",
+                    border: "1px solid var(--border3)", borderRadius: "var(--radius)",
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
+                    fontSize: 10, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace",
+                    lineHeight: 1.5, zIndex: 1000, pointerEvents: "none",
+                }}>
+                    LLM-as-a-judge based security scan,<br />runs per server
+                    <div style={{
+                        position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
+                        width: 0, height: 0,
+                        borderLeft: "5px solid transparent", borderRight: "5px solid transparent",
+                        borderTop: "5px solid var(--border3)",
+                    }} />
+                    <div style={{
+                        position: "absolute", top: "calc(100% - 1px)", left: "50%", transform: "translateX(-50%)",
+                        width: 0, height: 0,
+                        borderLeft: "4px solid transparent", borderRight: "4px solid transparent",
+                        borderTop: "4px solid var(--surface3)",
+                    }} />
+                </div>,
+                document.body
+            )}
+        </div>
+        <span style={{
+            fontSize: 9, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace",
+            letterSpacing: "0.03em", whiteSpace: "nowrap", paddingLeft: 2,
+            minHeight: 12, visibility: lastScannedRel ? "visible" : "hidden",
         }}>
-            {label}
-        </button>
+            scanned {lastScannedRel || "—"}
+        </span>
+        </div>
     )
 }
 
@@ -162,7 +368,7 @@ function RescanAllButton({ onRescan, rescanState, rescanSeconds }) {
     const borderColor = rescanState === "scanning" ? "var(--yellow-muted)" : "var(--border2)"
 
     return (
-        <button onClick={onRescan} style={{
+        <button onClick={() => onRescan()} style={{
             padding: "6px 14px", background: "var(--surface2)",
             border: `1px solid ${borderColor}`, borderRadius: "var(--radius)",
             cursor: rescanState === "scanning" ? "default" : "pointer", fontSize: 11,
@@ -232,6 +438,26 @@ function formatRelativeTime(isoStr) {
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
     return `${Math.floor(diff / 86400)}d ago`
+}
+
+// Attribution line — security scanning is powered by Cisco's mcp-scanner
+function ScanPoweredByBanner() {
+    return (
+        <div style={{
+            marginBottom: 16, fontSize: 11, color: "var(--text3)",
+            fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.02em",
+        }}>
+            Security scanning powered by{" "}
+            <a
+                href="https://github.com/cisco-ai-defense/mcp-scanner"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#7ec8ff", textDecoration: "none" }}
+            >
+                Cisco AI Defense — MCP Scanner
+            </a>
+        </div>
+    )
 }
 
 function ScannedAt({ timestamp }) {
@@ -1183,6 +1409,8 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                 </div>
             </div>
 
+            <ScanPoweredByBanner />
+
             {/* Vendor mini-dashboard */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
                 {vendorStats.map(g => (
@@ -1314,13 +1542,13 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                                     <h2 style={{ fontFamily: "Calibri, Arial, sans-serif", fontWeight: 400, fontSize: 24, color: "var(--cream)", margin: 0 }}>
                                         {detail.name}
                                     </h2>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexShrink: 0 }}>
                                         <ConnectionStatusBadge status={effectiveStatus(detail)} />
                                         <RescanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
-                                        {detail.discovered_tools?.length > 0 && (
-                                            <LlmScanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
-                                        )}
                                         <CopyConfigButton detail={detail} />
+                                        {detail.discovered_tools?.length > 0 && (
+                                            <LlmScanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} lastScannedAt={detail.security_llm_scanned_at} />
+                                        )}
                                     </div>
                                 </div>
                                 {detail.description && <p style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>{detail.description}</p>}
