@@ -63,3 +63,12 @@ class MCPServer(BaseModel):
     security_scanned: bool = False
     # UTC ISO timestamp of the last LLM-judge scan for this server, if any.
     security_llm_scanned_at: Optional[str] = None
+    # Findings from the last LLM-judge scan not present in the scan before
+    # it. None until the first scan; 0+ after. Resets only on process
+    # restart (in-memory, like everything else on this model).
+    security_llm_new_findings: Optional[int] = None
+    # Of the last LLM-judge scan's tools, how many were served from
+    # llm_cache (unchanged since a prior verdict) rather than a real call.
+    security_llm_cache_hits: Optional[int] = None
+    # Total tools attempted in the last LLM-judge scan (cache hits + real calls).
+    security_llm_last_scan_total: Optional[int] = None

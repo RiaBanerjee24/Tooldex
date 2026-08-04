@@ -6,7 +6,7 @@ import { useFetch } from "../hooks/useFetch.js"
 import {
     Card, CardHead, Empty, Spinner, Err, SidebarBtn, ProvenanceDot,
 } from "../components/ui.jsx"
-import { SecurityWarningIcon, SecurityCleanIcon, GearIcon, StopSquareIcon } from "../assets/icons.jsx"
+import { SecurityWarningIcon, SecurityCleanIcon, GearIcon, StopSquareIcon, InfoIcon, ReplayIcon, TrashIcon } from "../assets/icons.jsx"
 import { DownloadReport } from "../components/DownloadReport.jsx"
 
 // ---------------------------------------------------------------------------
@@ -53,9 +53,9 @@ function CopyConfigButton({ detail }) {
     return (
         <button onClick={handleCopy} style={{
             padding: "5px 12px", background: "var(--surface2)",
-            border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+            border: "1.5px solid rgba(255,255,255,0.3)", borderRadius: "var(--radius)",
             cursor: "pointer", fontSize: 10,
-            color: state === "copied" ? "var(--lime)" : "var(--text3)",
+            color: state === "copied" ? "var(--lime)" : "var(--cream)",
             fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
             transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
         }}>
@@ -117,13 +117,13 @@ function RescanServerButton({ serverId, onDone }) {
     const color = state === "done" ? "var(--lime)"
         : state === "error" ? "var(--red)"
         : state === "blocked" ? "var(--yellow-muted)"
-        : "var(--text3)"
+        : "var(--cream)"
 
     return (
         <>
             <button ref={btnRef} onClick={handleClick} style={{
                 padding: "5px 12px", background: "var(--surface2)",
-                border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+                border: "1.5px solid rgba(255,255,255,0.3)", borderRadius: "var(--radius)",
                 cursor: state === "scanning" ? "default" : "pointer", fontSize: 10,
                 color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
                 transition: "color 0.2s", whiteSpace: "nowrap", flexShrink: 0,
@@ -176,15 +176,21 @@ function RescanServerButton({ serverId, onDone }) {
 // Per-server LLM-as-judge button
 // ---------------------------------------------------------------------------
 
-function LlmScanServerButton({ serverId, onDone, lastScannedAt }) {
+function LlmScanServerButton({ serverId, onDone, lastScannedAt, newFindings, totalFindings, cacheHits, lastScanTotal, hasLlmCache }) {
     const [state, setState] = useState("idle") // idle | running | done | stopped | error
     const [errMsg, setErrMsg] = useState("")
     const [progress, setProgress] = useState({ scanned: 0, total: 0 })
     const [hover, setHover] = useState(false)
     const [pressed, setPressed] = useState(false)
     const [pos, setPos] = useState(null)
+    const [infoHover, setInfoHover] = useState(false)
+    const [infoPos, setInfoPos] = useState(null)
+    const [replayHover, setReplayHover] = useState(false)
+    const [clearHover, setClearHover] = useState(false)
+    const [clearState, setClearState] = useState("idle") // idle | clearing | done
     const [lastScannedRel, setLastScannedRel] = useState(() => formatRelativeTime(lastScannedAt))
     const btnRef = useRef(null)
+    const infoRef = useRef(null)
     const pollRef = useRef(null)
 
     useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
@@ -243,22 +249,60 @@ function LlmScanServerButton({ serverId, onDone, lastScannedAt }) {
         api.llmScanStop(serverId).catch(() => {})
     }
 
+    const handleClearCache = async (e) => {
+        e.stopPropagation()
+        if (clearState === "clearing" || !hasLlmCache) return
+        setClearState("clearing")
+        try {
+            await api.llmInvalidateCache(serverId)
+            setClearState("done")
+            onDone?.()
+            setTimeout(() => setClearState("idle"), 1500)
+        } catch (err) {
+            console.error("clear cache failed:", err)
+            setClearState("error")
+            setTimeout(() => setClearState("idle"), 2500)
+        }
+    }
+
     const showTooltip = () => {
         const r = btnRef.current?.getBoundingClientRect()
         if (r) setPos({ top: r.top, left: r.left + r.width / 2 })
         setHover(true)
     }
 
+    const showInfoTooltip = () => {
+        const r = infoRef.current?.getBoundingClientRect()
+        if (r) setInfoPos({ top: r.top, left: r.left + r.width / 2 })
+        setInfoHover(true)
+    }
+
+    const hasScanned = lastScannedAt != null && newFindings != null
+    const infoText = !hasScanned ? "Not yet scanned"
+        : newFindings > 0
+        ? `${newFindings} new vulnerabilit${newFindings === 1 ? "y" : "ies"} found (${totalFindings ?? newFindings} total)`
+        : `No new vulnerabilities since last scan (${totalFindings ?? 0} total)`
+    const cacheText = cacheHits > 0
+        ? `${cacheHits}/${lastScanTotal ?? cacheHits} tool${lastScanTotal === 1 ? "" : "s"} served from cached results`
+        : null
+
     const running = state === "running"
     const label = running ? "judging"
         : state === "done" ? "done ✓"
         : state === "stopped" ? "stopped ✓"
-        : state === "error" ? (errMsg.includes("not configured") ? "no llm key ✗" : "failed ✗")
+        : state === "error" ? (
+            errMsg.includes("not configured") ? "no llm key ✗"
+            : errMsg.includes("rejected the API key") ? "bad llm key ✗"
+            : errMsg.includes("denied access") ? "access denied ✗"
+            : errMsg.includes("doesn't exist") ? "bad model ✗"
+            : errMsg.includes("rate limit") ? "rate limited ✗"
+            : "failed ✗"
+          )
         : "AI security scan"
     const color = state === "done" ? "var(--lime)"
         : state === "stopped" ? "var(--yellow-muted)"
         : state === "error" ? "var(--red)"
-        : hover ? "var(--cream)" : "var(--text3)"
+        : "var(--cream)"
 
     return (
         <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", gap: 3, flexShrink: 0 }}>
@@ -286,21 +330,18 @@ function LlmScanServerButton({ serverId, onDone, lastScannedAt }) {
                         : hover
                         ? "linear-gradient(180deg, #333333, var(--surface2))"
                         : "linear-gradient(180deg, var(--surface3), var(--surface2))",
-                    borderTop: "1px solid rgba(255,255,255,0.1)",
-                    borderLeft: "1px solid rgba(255,255,255,0.06)",
-                    borderRight: "1px solid rgba(0,0,0,0.35)",
-                    borderBottom: "1px solid rgba(0,0,0,0.45)",
+                    border: `2px solid ${pressed || hover ? "var(--lime)" : "var(--lime-dim)"}`,
                     borderRadius: "var(--radius)",
                     cursor: running ? "default" : "pointer", fontSize: 10,
                     color, fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em",
-                    transition: "color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s",
+                    transition: "color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s",
                     whiteSpace: "nowrap", flexShrink: 0,
                     opacity: running ? 0.9 : 1,
                     transform: pressed ? "translateY(1px)" : hover ? "translateY(-1px)" : "none",
                     boxShadow: pressed
                         ? "inset 0 1px 3px rgba(0,0,0,0.5)"
                         : hover
-                        ? "0 0 0 1px var(--lime-dim), 0 3px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)"
+                        ? "0 0 8px rgba(190,215,84,0.4), 0 3px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)"
                         : "0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 3px rgba(0,0,0,0.35)",
                 }}
             >
@@ -347,13 +388,106 @@ function LlmScanServerButton({ serverId, onDone, lastScannedAt }) {
                 document.body
             )}
         </div>
-        <span style={{
-            fontSize: 9, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace",
-            letterSpacing: "0.03em", whiteSpace: "nowrap", paddingLeft: 2,
-            minHeight: 12, visibility: lastScannedRel ? "visible" : "hidden",
-        }}>
-            scanned {lastScannedRel || "—"}
-        </span>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 11, minHeight: 22, paddingLeft: 2 }}>
+            <span
+                ref={infoRef}
+                onMouseEnter={showInfoTooltip}
+                onMouseLeave={() => setInfoHover(false)}
+                style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22, flexShrink: 0, cursor: "default",
+                    background: infoHover ? "var(--surface3)" : "var(--surface2)",
+                    border: `1px solid ${infoHover ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.32)"}`,
+                    borderRadius: "var(--radius)",
+                    transition: "background 0.15s, border-color 0.15s",
+                }}
+            >
+                <InfoIcon size={13} color={hasScanned && newFindings > 0 ? "var(--yellow-muted)" : "var(--cream)"} />
+            </span>
+            {infoHover && infoPos && createPortal(
+                <div style={{
+                    position: "fixed", top: infoPos.top - 9, left: infoPos.left, transform: "translate(-50%, -100%)",
+                    padding: "7px 11px", background: "var(--surface3)",
+                    border: "1px solid var(--border3)", borderRadius: "var(--radius)",
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
+                    fontSize: 10, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace",
+                    lineHeight: 1.5, zIndex: 1000, pointerEvents: "none", whiteSpace: "nowrap",
+                }}>
+                    <div>{infoText}</div>
+                    {cacheText && (
+                        <div style={{ color: "var(--yellow-muted)", marginTop: 3, fontWeight: 600 }}>
+                            {cacheText}
+                        </div>
+                    )}
+                    <div style={{
+                        position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
+                        width: 0, height: 0,
+                        borderLeft: "5px solid transparent", borderRight: "5px solid transparent",
+                        borderTop: "5px solid var(--border3)",
+                    }} />
+                    <div style={{
+                        position: "absolute", top: "calc(100% - 1px)", left: "50%", transform: "translateX(-50%)",
+                        width: 0, height: 0,
+                        borderLeft: "4px solid transparent", borderRight: "4px solid transparent",
+                        borderTop: "4px solid var(--surface3)",
+                    }} />
+                </div>,
+                document.body
+            )}
+            <button
+                onClick={handleClick}
+                onMouseEnter={() => setReplayHover(true)}
+                onMouseLeave={() => setReplayHover(false)}
+                disabled={running}
+                title="Run AI security scan again"
+                style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22, flexShrink: 0, padding: 0,
+                    background: replayHover ? "var(--surface3)" : "var(--surface2)",
+                    border: `1px solid ${replayHover ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.32)"}`,
+                    borderRadius: "var(--radius)",
+                    transition: "background 0.15s, border-color 0.15s",
+                    cursor: running ? "default" : "pointer",
+                    color: "var(--cream)",
+                }}
+            >
+                <ReplayIcon size={13} color="currentColor" />
+            </button>
+            <button
+                onClick={handleClearCache}
+                onMouseEnter={() => setClearHover(true)}
+                onMouseLeave={() => setClearHover(false)}
+                disabled={clearState === "clearing" || !hasLlmCache}
+                title={
+                    !hasLlmCache ? "No cached results for this server"
+                    : clearState === "done" ? "Cache cleared ✓"
+                    : clearState === "error" ? "Failed to clear cache — see browser console"
+                    : "Clear cached AI scan results for this server"
+                }
+                style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 22, height: 22, flexShrink: 0, padding: 0,
+                    background: hasLlmCache && clearHover ? "var(--surface3)" : "var(--surface2)",
+                    border: `1px solid ${hasLlmCache && clearHover ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.32)"}`,
+                    borderRadius: "var(--radius)",
+                    transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                    cursor: (clearState === "clearing" || !hasLlmCache) ? "default" : "pointer",
+                    opacity: !hasLlmCache ? 0.35 : clearState === "clearing" ? 0.6 : 1,
+                    color: clearState === "done" ? "var(--lime)"
+                        : clearState === "error" ? "var(--red)"
+                        : "var(--cream)",
+                }}
+            >
+                <TrashIcon size={13} color="currentColor" />
+            </button>
+            <span style={{
+                fontSize: 9, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace",
+                letterSpacing: "0.03em", whiteSpace: "nowrap",
+                visibility: lastScannedRel ? "visible" : "hidden",
+            }}>
+                scanned {lastScannedRel || "—"}
+            </span>
+        </div>
         </div>
     )
 }
@@ -1547,7 +1681,16 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                                         <RescanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
                                         <CopyConfigButton detail={detail} />
                                         {detail.discovered_tools?.length > 0 && (
-                                            <LlmScanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} lastScannedAt={detail.security_llm_scanned_at} />
+                                            <LlmScanServerButton
+                                                serverId={sel}
+                                                onDone={() => { refetchDetail(); refetchList() }}
+                                                lastScannedAt={detail.security_llm_scanned_at}
+                                                newFindings={detail.security_llm_new_findings}
+                                                totalFindings={(detail.security_findings || []).filter(f => f.analyzer === "LLM").length}
+                                                cacheHits={detail.security_llm_cache_hits}
+                                                lastScanTotal={detail.security_llm_last_scan_total}
+                                                hasLlmCache={detail.has_llm_cache}
+                                            />
                                         )}
                                     </div>
                                 </div>

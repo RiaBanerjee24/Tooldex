@@ -73,6 +73,66 @@ export function StopSquareIcon({ size = 10, color = "var(--red)" }) {
     )
 }
 
+export function InfoIcon({ size = 14, color = "currentColor" }) {
+    return (
+        <svg
+            width={size} height={size}
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ flexShrink: 0, display: "block" }}
+        >
+            <circle cx="8" cy="8" r="6.5" stroke={color} strokeWidth="1.25" opacity="0.6" />
+            <circle cx="8" cy="5.1" r="0.95" fill={color} />
+            <line x1="8" y1="7.4" x2="8" y2="11.2" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+    )
+}
+
+export function ReplayIcon({ size = 14, color = "currentColor" }) {
+    return (
+        <svg
+            width={size} height={size}
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ flexShrink: 0, display: "block" }}
+        >
+            <path
+                d="M13 8A5 5 0 1 1 11.2 4.1"
+                stroke={color}
+                strokeWidth="1.4"
+                strokeLinecap="round"
+            />
+            <path
+                d="M11 1.8L11.35 4.55L8.7 5.2"
+                stroke={color}
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    )
+}
+
+export function TrashIcon({ size = 14, color = "currentColor" }) {
+    return (
+        <svg
+            width={size} height={size}
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ flexShrink: 0, display: "block" }}
+        >
+            <path d="M3 4.5H13" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+            <path d="M6 4.5V2.9C6 2.4 6.4 2 6.9 2H9.1C9.6 2 10 2.4 10 2.9V4.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4.2 4.5L4.8 13.1C4.83 13.6 5.24 14 5.75 14H10.25C10.76 14 11.17 13.6 11.2 13.1L11.8 4.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="6.5" y1="7" x2="6.7" y2="11.5" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+            <line x1="9.5" y1="7" x2="9.3" y2="11.5" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+    )
+}
+
 export function SecurityCleanIcon({ size = 14, color = "currentColor" }) {
     return (
         <svg

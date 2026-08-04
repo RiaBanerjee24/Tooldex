@@ -35,4 +35,5 @@ export const api = {
     llmScanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan`),
     llmScanStatus: (id) => get(`/api/servers/${encodeURIComponent(id)}/llm-scan/status`),
     llmScanStop: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/stop`),
+    llmInvalidateCache: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/invalidate-cache`),
 }

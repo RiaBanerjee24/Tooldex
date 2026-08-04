@@ -81,3 +81,42 @@ def put_cached(
         sorted_items = sorted(cache.items(), key=lambda kv: kv[1].get("ts", 0))
         cache = dict(sorted_items[-_MAX_ENTRIES:])
     _save(cache)
+
+
+def invalidate_server(server_id: str) -> int:
+    """Remove all cached entries for one server. Returns how many were removed."""
+    cache = _load()
+    prefix = f"{server_id}::"
+    remaining = {k: v for k, v in cache.items() if not k.startswith(prefix)}
+    removed = len(cache) - len(remaining)
+    if removed:
+        _save(remaining)
+    return removed
+
+
+def has_entries_for(server_id: str) -> bool:
+    """True if any cache entry exists for this server, regardless of hash validity."""
+    cache = _load()
+    prefix = f"{server_id}::"
+    return any(k.startswith(prefix) for k in cache)
+
+
+def get_all_matching(server_id: str, tools: list) -> dict[str, dict]:
+    """
+    For manifest hydration at startup: given a server's current discovered
+    tools (each with .name/.description/.input_schema), return
+    {tool_name: {"findings", "is_safe", "ts"}} for every tool whose cached
+    verdict still matches its current identity hash.
+    """
+    cache = _load()
+    result = {}
+    for t in tools:
+        h = tool_hash(t.name, t.description, t.input_schema)
+        entry = cache.get(_entry_key(server_id, t.name))
+        if entry and entry.get("hash") == h:
+            result[t.name] = {
+                "findings": entry.get("findings", []),
+                "is_safe": entry.get("is_safe", True),
+                "ts": entry.get("ts", 0),
+            }
+    return result

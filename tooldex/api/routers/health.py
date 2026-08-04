@@ -65,6 +65,8 @@ async def rescan(request: Request):
         scan_results = await asyncio.to_thread(_silenced, scan_servers, scan_targets)
 
         manifest = build_manifest(config_result, tool_results, scan_results)
+        from tooldex.scanner import hydrate_llm_cache
+        hydrate_llm_cache(manifest)
         init_parser_from_manifest(manifest)
 
         from datetime import datetime, timezone

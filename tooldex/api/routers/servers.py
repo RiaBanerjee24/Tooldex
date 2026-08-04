@@ -94,7 +94,7 @@ async def abort_all_llm_jobs() -> None:
         await asyncio.gather(*(abort_llm_job(sid) for sid in ids), return_exceptions=True)
 
 
-async def _run_llm_judge_job(server_id: str, server, job: _LlmJudgeJob) -> None:
+async def _run_llm_judge_job(server_id: str, server, job: _LlmJudgeJob, force: bool = False) -> None:
     from datetime import datetime, timezone
     from tooldex.scanner import run_llm_judge_scan
     from tooldex.core.discovery.to_manifest import _security_data, _SEVERITY_RANK
@@ -103,15 +103,28 @@ async def _run_llm_judge_job(server_id: str, server, job: _LlmJudgeJob) -> None:
         job.scanned = scanned
         job.total = total
 
+    cache_hit_tools: list[str] = []
+
+    def on_cache_hit(tool_name: str) -> None:
+        cache_hit_tools.append(tool_name)
+
     try:
         scan_results = await run_llm_judge_scan(
-            server, on_progress=on_progress, cancel_event=job.cancel_event
+            server, on_progress=on_progress, cancel_event=job.cancel_event,
+            on_cache_hit=on_cache_hit, force=force,
         )
         llm_findings, _ = _security_data(scan_results)
 
         manifest = get_parser().manifest
         current = manifest.get_server(server_id)
         if current:
+            def finding_key(f):
+                return (f.get("tool_name"), f.get("severity"), f.get("threat_category"))
+
+            before = {finding_key(f) for f in current.security_findings if f.get("analyzer") == "LLM"}
+            after = {finding_key(f) for f in llm_findings}
+            new_count = len(after - before)
+
             merged = [f for f in current.security_findings if f.get("analyzer") != "LLM"] + llm_findings
             worst = min(
                 (f["severity"] for f in merged),
@@ -122,6 +135,9 @@ async def _run_llm_judge_job(server_id: str, server, job: _LlmJudgeJob) -> None:
                 "security_findings": merged,
                 "security_risk": worst,
                 "security_llm_scanned_at": datetime.now(timezone.utc).isoformat(),
+                "security_llm_new_findings": new_count,
+                "security_llm_cache_hits": len(cache_hit_tools),
+                "security_llm_last_scan_total": len(scan_results),
                 "security_scanned": True,
             })
             job.security_risk = worst
@@ -131,6 +147,11 @@ async def _run_llm_judge_job(server_id: str, server, job: _LlmJudgeJob) -> None:
     except Exception as e:
         job.status = "error"
         job.error = str(e)
+
+
+def _has_llm_cache(server_id: str) -> bool:
+    from tooldex.scanner import llm_cache
+    return llm_cache.has_entries_for(server_id)
 
 
 @router.get("/servers")
@@ -148,6 +169,7 @@ async def list_servers():
             "tool_count": tool_count,
             "discovered_tool_count": tool_count,
             "source_file": _friendly_path(server.source_path),
+            "has_llm_cache": _has_llm_cache(server_id),
         }))
 
     total_tools = sum(len(s.discovered_tools) for s in manifest.servers.values())
@@ -176,6 +198,7 @@ async def get_server(server_id: str):
     return _redact_server({
         **server.model_dump(),
         "agents_connected": agents_connected,
+        "has_llm_cache": _has_llm_cache(server_id),
     })
 
 
@@ -224,8 +247,13 @@ async def rescan_server(server_id: str, force: bool = False):
 
 
 @router.post("/servers/{server_id}/llm-scan")
-async def llm_scan_server(server_id: str):
-    """Start the LLM-as-judge analyzer for one server as a background job. Poll llm-scan/status for progress."""
+async def llm_scan_server(server_id: str, force: bool = True):
+    """
+    Start the LLM-as-judge analyzer for one server as a background job. Poll
+    llm-scan/status for progress. `force` (default true — every UI-triggered
+    scan forces fresh calls) skips the per-tool cache and re-judges every
+    tool for real; results are still written to the cache either way.
+    """
     manifest = get_parser().manifest
     server = manifest.get_server(server_id)
     if not server:
@@ -240,7 +268,7 @@ async def llm_scan_server(server_id: str):
 
     job = _LlmJudgeJob(cancel_event=asyncio.Event(), total=len(server.discovered_tools))
     _llm_jobs[server_id] = job
-    job.task = asyncio.create_task(_run_llm_judge_job(server_id, server, job))
+    job.task = asyncio.create_task(_run_llm_judge_job(server_id, server, job, force=force))
 
     return {"status": "started", "total": job.total}
 
@@ -269,3 +297,36 @@ async def llm_scan_stop(server_id: str):
         return {"status": job.status if job else "idle"}
     job.cancel_event.set()
     return {"status": "stopping"}
+
+
+@router.post("/servers/{server_id}/llm-scan/invalidate-cache")
+async def llm_scan_invalidate_cache(server_id: str):
+    """
+    Remove all cached LLM-judge verdicts for this server and reset its
+    displayed LLM scan state back to "never scanned" — the cache no longer
+    backs those results, so showing them as current would be misleading.
+    """
+    from tooldex.scanner import llm_cache
+    from tooldex.core.discovery.to_manifest import _SEVERITY_RANK
+
+    removed = llm_cache.invalidate_server(server_id)
+
+    manifest = get_parser().manifest
+    current = manifest.get_server(server_id)
+    if current:
+        remaining = [f for f in current.security_findings if f.get("analyzer") != "LLM"]
+        worst = min(
+            (f["severity"] for f in remaining),
+            key=lambda s: _SEVERITY_RANK.get(s.upper(), 99),
+            default=None,
+        )
+        manifest.servers[server_id] = current.model_copy(update={
+            "security_findings": remaining,
+            "security_risk": worst,
+            "security_llm_scanned_at": None,
+            "security_llm_new_findings": None,
+            "security_llm_cache_hits": None,
+            "security_llm_last_scan_total": None,
+        })
+
+    return {"status": "ok", "removed": removed}

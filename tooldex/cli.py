@@ -348,6 +348,8 @@ def run(
 
     store_discovery_sources(config_result.sources)
     manifest = build_manifest(config_result, tool_results, scan_results)
+    from tooldex.scanner import hydrate_llm_cache
+    hydrate_llm_cache(manifest)
     init_parser_from_manifest(manifest)
 
     total_tools = sum(len(s.discovered_tools) for s in manifest.servers.values())
