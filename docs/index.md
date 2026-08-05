@@ -221,6 +221,7 @@ tooldex [OPTIONS] COMMAND [ARGS]
 | `--concurrency` | `8` | Maximum concurrent server probes. |
 | `--no-probe <name>` | — | Skip probing a specific server by name. Repeatable. |
 | `--config <path>` | — | Additional MCP config file to include. Repeatable. |
+| `--no-cache` | off | Bypass the probe cache and re-probe every server live. |
 
 #### Examples
 
@@ -281,6 +282,10 @@ Powered by [Cisco's MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner
 ### YARA scan (always on)
 
 Runs automatically as part of every discovery and rescan, for every server. Local, free, no API key required, no configuration needed.
+
+| Env var | Description | Default |
+|---|---|---|
+| `MCP_SCANNER_CONCURRENCY` | Maximum concurrent YARA scan calls. Distinct from `run`'s `--concurrency` flag, which controls tool-*probing* concurrency, not scanning. | `8` |
 
 ### AI security scan (LLM-as-judge, opt-in)
 
