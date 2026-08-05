@@ -150,7 +150,7 @@ export default function App() {
                         <Dashboard
                             health={health}
                             serversData={servers}
-                            onNavigateServers={() => setTab("Servers")}
+                            onNavigateServers={() => { setSelectedServerId(null); setTab("Servers") }}
                             onNavigateToServer={navigateToServer}
                             onRescan={handleRescan}
                             rescanState={rescanState}

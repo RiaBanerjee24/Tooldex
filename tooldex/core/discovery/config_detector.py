@@ -2,15 +2,6 @@
 tooldex/core/discovery/config_detector.py
 
 Orchestrates MCP config-file autodiscovery.
-
-Delegates to:
-  _readers.py        — file I/O (JSON / TOML config readers)
-  _parsers.py        — env resolution and mcpServers shape parsing
-  _paths.py          — platform-aware path resolution
-  _status_claude.py  — live status via `claude mcp list`
-  _status_cursor.py  — live status via `cursor-agent mcp list-tools`
-  _status_codex.py   — live status via `codex mcp list`
-  _docker_mcp.py     — Docker MCP Toolkit profile reader
 """
 from __future__ import annotations
 

@@ -1,16 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { api } from '../api.js'
-
-const FORMATS = [
-    { key: 'pdf-summary', label: 'Summary PDF',  ext: '.pdf', hint: 'servers · tool names · severity' },
-    { key: 'pdf-full',    label: 'Full PDF',      ext: '.pdf', hint: 'descriptions · inline findings'  },
-    { key: 'markdown',    label: 'Markdown',      ext: '.md',  hint: 'full report as .md'              },
-]
+import { groupServers } from './servers/serverHelpers.jsx'
 
 export function DownloadReport({ servers, scannedAt }) {
-    const [open, setOpen]       = useState(false)
-    const [status, setStatus]   = useState('idle') // idle | loading | done | error
-    const [errMsg, setErrMsg]   = useState(null)
+    const [open, setOpen]                 = useState(false)
+    const [status, setStatus]             = useState('idle') // idle | loading | done | error
+    const [errMsg, setErrMsg]             = useState(null)
+    const [allChecked, setAllChecked]     = useState(true)
+    const [checkedGroups, setCheckedGroups] = useState(new Set())
+    const [includeSecurity, setIncludeSecurity] = useState(false)
     const ref = useRef(null)
 
     useEffect(() => {
@@ -22,18 +19,40 @@ export function DownloadReport({ servers, scannedAt }) {
         return () => document.removeEventListener('mousedown', onClickOutside)
     }, [open])
 
+    const groups = groupServers(servers || [])
+
+    function toggleAll() {
+        setAllChecked(true)
+        setCheckedGroups(new Set())
+    }
+
+    function toggleGroup(key) {
+        setAllChecked(false)
+        setCheckedGroups(prev => {
+            const next = new Set(prev)
+            next.has(key) ? next.delete(key) : next.add(key)
+            return next
+        })
+    }
+
+    const scopedServers = allChecked
+        ? (servers || [])
+        : groups.filter(g => checkedGroups.has(g.key)).flatMap(g => g.servers)
+
+    const scopeLabel = allChecked
+        ? 'All'
+        : groups.filter(g => checkedGroups.has(g.key)).map(g => g.key).join('+') || 'none'
+
+    const canDownload = (allChecked || checkedGroups.size > 0) && scopedServers.length > 0
+
     async function handleDownload(format) {
+        if (!canDownload) return
         setOpen(false)
         setStatus('loading')
         setErrMsg(null)
         try {
-            const [details, { buildReportData }, { generateReport }] = await Promise.all([
-                Promise.all((servers || []).map(s => api.server(s.id))),
-                import('../report/builder.js'),
-                import('../report/index.js'),
-            ])
-            const reportData = buildReportData(servers || [], details, scannedAt)
-            generateReport(reportData, format)
+            const { downloadReport } = await import('../report/download.js')
+            await downloadReport(scopedServers, scannedAt, format, { includeSecurity, scopeLabel })
             setStatus('done')
             setTimeout(() => setStatus('idle'), 2500)
         } catch (err) {
@@ -52,6 +71,20 @@ export function DownloadReport({ servers, scannedAt }) {
     const btnColor = status === 'done'  ? 'var(--lime)'
         : status === 'error' ? 'var(--red)'
         : 'var(--text2)'
+
+    const checkboxRow = {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 10, padding: '6px 16px', cursor: 'pointer', userSelect: 'none',
+    }
+    const checkboxLabel = {
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 11, color: 'var(--text2)', fontFamily: 'Menlo, Consolas, monospace',
+    }
+    const checkboxInput = { accentColor: 'var(--lime)', width: 12, height: 12, cursor: 'pointer', flexShrink: 0 }
+    const sectionLabel = {
+        padding: '8px 16px 4px', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+        textTransform: 'uppercase', color: 'var(--text3)', fontFamily: 'Menlo, Consolas, monospace',
+    }
 
     return (
         <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 20px' }}>
@@ -98,32 +131,75 @@ export function DownloadReport({ servers, scannedAt }) {
                         border: '1px solid var(--border3)',
                         borderRadius: 'var(--radius-lg)',
                         padding: '6px 0',
-                        minWidth: 160,
+                        minWidth: 250,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                         zIndex: 200,
                     }}>
-                        {FORMATS.map(f => (
-                            <button
-                                key={f.key}
-                                onClick={() => handleDownload(f.key)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    width: '100%', padding: '8px 16px',
-                                    background: 'none', border: 'none',
-                                    cursor: 'pointer', textAlign: 'left',
-                                    fontFamily: 'Menlo, Consolas, monospace',
-                                    gap: 12,
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface3)'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                            >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
-                                    <span style={{ fontSize: 11, color: 'var(--text2)' }}>{f.label}</span>
-                                    <span style={{ fontSize: 9, color: 'var(--text3)' }}>{f.hint}</span>
-                                </div>
-                                <span style={{ fontSize: 9, color: 'var(--text3)', flexShrink: 0 }}>{f.ext}</span>
-                            </button>
+                        <div style={sectionLabel}>Scope</div>
+                        <label style={checkboxRow}>
+                            <span style={checkboxLabel}>
+                                <input type="checkbox" checked={allChecked} onChange={toggleAll} style={checkboxInput} />
+                                All servers
+                            </span>
+                            <span style={{ fontSize: 9, color: 'var(--text3)' }}>{(servers || []).length}</span>
+                        </label>
+                        {groups.map(g => (
+                            <label key={g.key} style={checkboxRow}>
+                                <span style={checkboxLabel}>
+                                    <input
+                                        type="checkbox"
+                                        checked={!allChecked && checkedGroups.has(g.key)}
+                                        onChange={() => toggleGroup(g.key)}
+                                        style={checkboxInput}
+                                    />
+                                    {g.key}
+                                </span>
+                                <span style={{ fontSize: 9, color: 'var(--text3)' }}>{g.servers.length}</span>
+                            </label>
                         ))}
+
+                        <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+
+                        <label style={checkboxRow}>
+                            <span style={checkboxLabel}>
+                                <input
+                                    type="checkbox"
+                                    checked={includeSecurity}
+                                    onChange={() => setIncludeSecurity(v => !v)}
+                                    style={checkboxInput}
+                                />
+                                Include security scan
+                            </span>
+                        </label>
+
+                        <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+
+                        <div style={{ display: 'flex', gap: 6, padding: '4px 16px 2px' }}>
+                            <button
+                                onClick={() => handleDownload('pdf')}
+                                disabled={!canDownload}
+                                style={{
+                                    flex: 1, padding: '7px 0', background: 'var(--surface3)',
+                                    border: '1px solid var(--border2)', borderRadius: 'var(--radius)',
+                                    cursor: canDownload ? 'pointer' : 'default', opacity: canDownload ? 1 : 0.4,
+                                    fontSize: 10, color: 'var(--cream)', fontFamily: 'Menlo, Consolas, monospace',
+                                }}
+                            >
+                                PDF
+                            </button>
+                            <button
+                                onClick={() => handleDownload('markdown')}
+                                disabled={!canDownload}
+                                style={{
+                                    flex: 1, padding: '7px 0', background: 'var(--surface3)',
+                                    border: '1px solid var(--border2)', borderRadius: 'var(--radius)',
+                                    cursor: canDownload ? 'pointer' : 'default', opacity: canDownload ? 1 : 0.4,
+                                    fontSize: 10, color: 'var(--cream)', fontFamily: 'Menlo, Consolas, monospace',
+                                }}
+                            >
+                                Markdown
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

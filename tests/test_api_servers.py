@@ -3,7 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tooldex.api.app import create_app
-from tooldex.api.routers.servers import _friendly_path, _is_sensitive_env, _redact_server
+from tooldex.api.redact import friendly_path, _is_sensitive_env, redact_server
 from tooldex.core.models.manifest import TooldexManifest, TooldexMetadata
 from tooldex.core.models.server import DiscoveredToolLite, MCPServer
 from tooldex.core.parsers.parser import init_parser_from_manifest
@@ -36,39 +36,39 @@ class TestIsSensitiveEnv:
 
 class TestFriendlyPath:
     def test_none_returns_none(self):
-        assert _friendly_path(None) is None
+        assert friendly_path(None) is None
 
     def test_empty_string_returns_none(self):
-        assert _friendly_path("") is None
+        assert friendly_path("") is None
 
     def test_path_under_home_gets_tilde_prefix(self, monkeypatch, tmp_path):
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         target = tmp_path / ".cursor" / "mcp.json"
-        assert _friendly_path(str(target)) == "~.cursor/mcp.json"
+        assert friendly_path(str(target)) == "~.cursor/mcp.json"
 
     def test_path_outside_home_returned_unchanged(self, monkeypatch, tmp_path):
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path / "home")
-        assert _friendly_path("/etc/elsewhere/mcp.json") == "/etc/elsewhere/mcp.json"
+        assert friendly_path("/etc/elsewhere/mcp.json") == "/etc/elsewhere/mcp.json"
 
 
 class TestRedactServer:
     def test_redacts_sensitive_headers(self):
-        out = _redact_server({"headers": {"Authorization": "Bearer abc", "X-Custom": "keep-me"}})
+        out = redact_server({"headers": {"Authorization": "Bearer abc", "X-Custom": "keep-me"}})
         assert out["headers"]["Authorization"] == "***"
         assert out["headers"]["X-Custom"] == "keep-me"
 
     def test_redacts_sensitive_env_vars(self):
-        out = _redact_server({"env": {"API_KEY": "abc123", "HOST": "localhost"}})
+        out = redact_server({"env": {"API_KEY": "abc123", "HOST": "localhost"}})
         assert out["env"]["API_KEY"] == "***"
         assert out["env"]["HOST"] == "localhost"
 
     def test_no_headers_or_env_passthrough(self):
-        out = _redact_server({"name": "fs"})
+        out = redact_server({"name": "fs"})
         assert out == {"name": "fs"}
 
     def test_does_not_mutate_input(self):
         original = {"headers": {"Authorization": "secret"}}
-        _redact_server(original)
+        redact_server(original)
         assert original["headers"]["Authorization"] == "secret"
 
 

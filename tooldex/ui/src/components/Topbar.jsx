@@ -12,7 +12,10 @@ export function Topbar({ tab, setTab, health }) {
                 <div style={{ display: "flex", alignItems: "center", height: 56, gap: 8 }}>
 
                     {/* Logo */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 36 }}>
+                    <div
+                        onClick={() => setTab("Dashboard")}
+                        style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 36, cursor: "pointer" }}
+                    >
                         <img src={LOGO_URL} alt="Tooldex" width={26} height={26} style={{ flexShrink: 0 }} />
                         <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
                             <span style={{ fontFamily: "Georgia, serif", fontWeight: 500, fontSize: 18, color: "var(--cream)", letterSpacing: "-0.01em" }}>Tooldex</span>

@@ -39,6 +39,7 @@ As your agentic AI setup grows across distributed systems and multiple clients, 
 - [MCP config format](#mcp-config-format)
 - [CLI reference](#cli-reference)
 - [JSON output](#json-output)
+- [Security scanning](#security-scanning)
 - [API endpoints](#api-endpoints)
 - [Testing](#testing)
 - [Contributing](#contributing)
@@ -360,6 +361,48 @@ tooldex run --json | jq '.duplicates'
 
 ---
 
+## Security scanning
+
+Powered by [Cisco's MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner) (`mcpscanner` on PyPI) — Tooldex wraps it, it doesn't reimplement it.
+
+### YARA scan (always on)
+
+Runs automatically as part of every discovery and rescan, for every server. Local, free, no API key required, no configuration needed.
+
+### AI security scan (LLM-as-judge, opt-in)
+
+Tooldex's AI security scan is powered by Cisco AI Defense's open-source mcpscanner SDK, running entirely locally — the only network call it makes is to whichever LLM provider you configure.
+
+An LLM reviews each tool's name, description, and input schema for malicious intent (data exfiltration, prompt injection, tool poisoning, etc.). Unlike YARA, this never runs automatically — it's triggered manually per server, from the UI ("AI security scan" button) or via `POST /api/servers/{id}/llm-scan/`.
+
+Requires `TOOLDEX_LLM_API_KEY` at minimum. Without it, the AI security scan is simply unavailable — YARA scanning is unaffected.
+
+| Env var | Legacy fallback | Description | Default |
+|---|---|---|---|
+| `TOOLDEX_LLM_API_KEY` | `MCP_SCANNER_LLM_API_KEY` | API key for your LLM provider (OpenAI, Anthropic, etc). Required to enable the AI security scan. | *(unset — scan disabled)* |
+| `TOOLDEX_LLM_MODEL` | `MCP_SCANNER_LLM_MODEL` | Model to use, e.g. `gpt-4o`, `claude-3-5-sonnet-latest` | `gpt-4o` |
+| `TOOLDEX_LLM_RATE_LIMIT_DELAY` | `MCP_SCANNER_LLM_RATE_LIMIT_DELAY` | Seconds to wait between LLM calls | `2.0` |
+| `TOOLDEX_LLM_TEMPERATURE` | `MCP_SCANNER_LLM_TEMPERATURE` | Sampling temperature | `1.0` |
+| `TOOLDEX_LLM_MAX_RETRIES` | `MCP_SCANNER_LLM_MAX_RETRIES` | Max retries on a failed LLM call | `6` |
+| `TOOLDEX_LLM_BASE_URL` | `MCP_SCANNER_LLM_BASE_URL` | Custom endpoint (Azure OpenAI, self-hosted Ollama/vLLM/LocalAI, etc.) | *(unset)* |
+| `TOOLDEX_LLM_API_VERSION` | `MCP_SCANNER_LLM_API_VERSION` | API version, e.g. required by Azure OpenAI | *(unset)* |
+| `TOOLDEX_LLM_TIMEOUT` | `MCP_SCANNER_LLM_TIMEOUT` | Per-request LLM timeout in seconds | `30` |
+
+Every `TOOLDEX_LLM_*` var also accepts its original mcpscanner name (`MCP_SCANNER_LLM_*`) as a fallback if the `TOOLDEX_LLM_*` one isn't set — an existing mcpscanner-native setup keeps working un-migrated. Using a legacy name prints a one-time notice on the CLI pointing at the rename.
+
+`MCP_SCANNER_API_KEY` (Cisco's separate cloud API) and `VIRUSTOTAL_API_KEY` are **not** supported — Tooldex only uses mcpscanner's local YARA and LLM analyzers.
+
+**Model support:** any [LiteLLM](https://docs.litellm.ai/)-compatible model string works, since the LLM analyzer runs through LiteLLM internally — there's no fixed allowlist. `TOOLDEX_LLM_MODEL` defaults to `gpt-4o` if unset.
+
+**Caching:** results are cached per-server, per-tool at `~/.tooldex/llm_scan_cache.json`, fingerprinted by a hash of each tool's name, description, and input schema — a cache entry is invalidated automatically the moment that tool's identity changes, with no TTL otherwise.
+
+- Clicking "AI security scan" (or its rerun icon) always forces a fresh LLM call per tool, bypassing any cache hit — but still writes the result back to the cache.
+- On `tooldex run` startup, and on every page load, the last cached verdict for each server is shown immediately with zero LLM calls made.
+- The clear-cache (trash) icon removes all cached entries for a server and resets its displayed state back to "not yet scanned."
+- Rescanning a server (or "Rescan All") while an AI security scan is in flight on it is blocked with `409 llm_scan_running` unless forced, in which case the running scan is aborted first.
+
+---
+
 ## API endpoints
 
 When the server is running (default `http://127.0.0.1:8282`):
@@ -369,11 +412,29 @@ All endpoints respond with or without a trailing slash.
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/health/` | `status`, current `timestamp`, and `uptime_seconds` since the server started |
-| `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file` |
+| `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file`, `has_llm_cache`, and the `security_*` fields below |
 | `GET` | `/api/servers/{id}/` | Single server with full tool detail |
-| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server and update its tools in place |
+| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server and update its tools in place. `force=true` aborts an in-flight AI security scan on this server first; otherwise returns `409 {"error": "llm_scan_running"}` while one is running |
+| `POST` | `/api/servers/{id}/llm-scan/` | Start the AI security scan for one server as a background job. `force` (default `true`) skips the cache and forces fresh LLM calls; results are cached either way |
+| `GET` | `/api/servers/{id}/llm-scan/status/` | Poll progress (`scanned`/`total`) and outcome of the AI security scan job for this server |
+| `POST` | `/api/servers/{id}/llm-scan/stop/` | Signal a running AI security scan to stop |
+| `POST` | `/api/servers/{id}/llm-scan/invalidate-cache/` | Clear cached AI scan results for this server and reset its displayed state to "not yet scanned" |
 | `GET` | `/api/files/` | All config files that were scanned: path, client, status, server IDs found, any parse errors |
 | `POST` | `/api/rescan/` | Full rediscovery — re-reads all MCP configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already in progress. |
+| `GET` | `/api/rescan/stream/` | Same rediscovery as above, streamed as Server-Sent Events (one per server, then `done`). `force=true` aborts any in-flight AI security scans fleet-wide first; otherwise yields `{"type": "blocked", "servers": [...]}` and stops |
+
+**Per-server security fields** (on `/api/servers/` and `/api/servers/{id}/`):
+
+| Field | Description |
+|---|---|
+| `security_findings` | List of findings from the last scan: `{tool_name, severity, analyzer, threat_category, summary}` |
+| `security_risk` | Worst severity across all findings — `HIGH` / `MEDIUM` / `LOW` / `INFO` / `null` |
+| `security_scanned` | `true` once this server has been included in a scan run |
+| `security_llm_scanned_at` | UTC ISO timestamp of the last AI security scan, if any |
+| `security_llm_new_findings` | Findings from the last AI scan not present in the one before it |
+| `security_llm_cache_hits` | Of the last AI scan's tools, how many were served from cache rather than a real LLM call |
+| `security_llm_last_scan_total` | Total tools attempted in the last AI scan (cache hits + real calls) |
+| `has_llm_cache` | Whether any cached AI scan result exists for this server (drives the clear-cache icon) |
 
 ---
 

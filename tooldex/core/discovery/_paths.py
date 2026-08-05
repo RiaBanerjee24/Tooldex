@@ -12,28 +12,6 @@ Global (user-level) configs live in the home directory and apply machine-wide.
 Project-level configs live somewhere inside a project tree (below home).
 walk_up_for() stops at the home directory so a project walk-up can never
 accidentally return a global config file.
-
-Supported locations:
-
-    Claude Code         ~/.claude.json              (global)
-                        <project>/.claude/mcp.json  (project, walk up, stops at ~)
-                        <project>/.claude.json       (project, flat-file alternative)
-
-    Cursor              ~/.cursor/mcp.json          (global)
-                        <project>/.cursor/mcp.json  (project, walk up, stops at ~)
-
-    Codex CLI           ~/.codex/config.toml        (global)
-                        <project>/.codex/config.toml (project, walk up, stops at ~)
-
-    MCP JSON            ~/.mcp.json                 (global, team/shared definitions)
-                        <project>/.mcp.json          (project, walk up, stops at ~)
-                        <project>/mcp.json           (bare, project, walk up, stops at ~)
-
-    Agents              ~/.agents/mcp.json          (global)
-                        <project>/.agents/mcp.json   (project, walk up, stops at ~)
-
-    Antigravity IDE     ~/.gemini/antigravity/mcp_config.json   (global)
-                        <project>/.gemini/antigravity/mcp_config.json  (project, walk up, stops at ~)
 """
 from __future__ import annotations
 
