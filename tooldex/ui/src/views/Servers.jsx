@@ -460,7 +460,7 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                                                 ? <div>
                                                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
                                                         <span style={{ fontFamily: "Menlo, Consolas, monospace", fontSize: 11, color: "var(--cream)" }}>{v || "—"}</span>
-                                                        <ScopeTag scope={classifyClient(detail.client).scope} />
+                                                        <ScopeTag scope={classifyClient(detail.client).scope} label={classifyClient(detail.client).scopeLabel} />
                                                     </div>
                                                     {detail.source_path && (
                                                         <div style={{ fontSize: 9, color: "var(--text3)", fontFamily: "Menlo, Consolas, monospace", wordBreak: "break-all", lineHeight: 1.5 }}>

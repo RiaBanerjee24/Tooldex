@@ -57,6 +57,22 @@ class TestRescanEndpoint:
         assert result["tools"] == 0
 
     @pytest.mark.asyncio
+    async def test_security_scan_skipped_when_disabled(self, monkeypatch, capsys):
+        monkeypatch.setenv("TOOLDEX_SECURITY_SCAN", "false")
+        config_result = SimpleNamespace(sources=[], servers={})
+        with patch("tooldex.core.discovery.detect_all", return_value=config_result), \
+             patch("tooldex.core.discovery.list_tools_for_all", return_value=[]), \
+             patch("tooldex.scanner.scan_servers") as mock_scan, \
+             patch("tooldex.scanner.hydrate_llm_cache"), \
+             patch("tooldex._cli_output.print_summary"), \
+             patch("tooldex._cli_output.print_banner"):
+            result = await rescan_module.rescan(SimpleNamespace(base_url="http://test/"))
+
+        assert result["status"] == "ok"
+        mock_scan.assert_not_called()
+        assert "Security scan skipped" in capsys.readouterr().out
+
+    @pytest.mark.asyncio
     async def test_lock_is_released_after_completion(self):
         config_result = SimpleNamespace(sources=[], servers={})
         with patch("tooldex.core.discovery.detect_all", return_value=config_result), \

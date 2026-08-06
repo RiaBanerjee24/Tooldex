@@ -60,3 +60,13 @@ def isolated_llm_env(monkeypatch):
     scanner_config._warned_legacy_llm_vars.clear()
     yield
     scanner_config._warned_legacy_llm_vars.clear()
+
+
+@pytest.fixture(autouse=True)
+def isolated_security_scan_env(monkeypatch):
+    """cli.py's --no-security-scan sets TOOLDEX_SECURITY_SCAN via a raw
+    os.environ[...] assignment (not monkeypatch), so it wouldn't otherwise be
+    auto-reverted between tests. Clear it before and after every test."""
+    monkeypatch.delenv("TOOLDEX_SECURITY_SCAN", raising=False)
+    yield
+    monkeypatch.delenv("TOOLDEX_SECURITY_SCAN", raising=False)

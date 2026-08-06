@@ -1,5 +1,5 @@
 # 🔭 Tooldex
-> Unified MCP Server Observatory — autodiscover, inspect, and monitor Model Context Protocol tools across Claude Code, Cursor, Codex, Gemini, Agents, and Docker
+> Unified MCP Server Observatory — autodiscover, inspect, and monitor Model Context Protocol tools across Claude Code, Cursor, Codex, VSCode, Copilot, Gemini, Agents, and Docker
 
 [![PyPI version](https://badge.fury.io/py/tooldex.svg)](https://pypi.org/project/tooldex/)
 [![Downloads](https://img.shields.io/pypi/dw/tooldex)](https://pypistats.org/packages/tooldex)
@@ -8,7 +8,7 @@
 
 **Questions, feedback, or just want to say hi?** → [Contact the Dev](#contact-the-dev) · [banerjeeria2406@gmail.com](mailto:banerjeeria2406@gmail.com)
 
-Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Gemini (Antigravity), Agents, Docker MCP Toolkit — and surfaces every exposed tool in a unified UI with a live REST API. No manual config. Run it from any project directory and it finds everything.
+Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, VSCode, Copilot, Gemini (Antigravity), Agents, Docker MCP Toolkit — and surfaces every exposed tool in a unified UI with a live REST API. No manual config. Run it from any project directory and it finds everything.
 
 > ⚠️ **Tool Poisoning Attacks are real.** A malicious MCP server can expose dozens of legitimate tools and hide one bad one. Tooldex gives you full visibility into your MCP tool surface before anything executes — essential for any agentic AI environment.
 
@@ -50,7 +50,7 @@ As your agentic AI setup grows across distributed systems and multiple clients, 
 ## Requirements
 
 - Python 3.10 or later
-- At least one supported MCP client configured (Claude Code, Cursor, Codex, Gemini, or Docker MCP Toolkit)
+- At least one supported MCP client configured (Claude Code, Cursor, Codex, VSCode, Copilot, Gemini, or Docker MCP Toolkit)
 
 ---
 
@@ -135,6 +135,24 @@ Tooldex checks all of the following on every run. Files that do not exist are sk
 |---|---|
 | Global | `~/.codex/config.toml` |
 | Project | `<project>/.codex/config.toml` |
+
+### VSCode
+
+| Scope | Path |
+|---|---|
+| Workspace | `<project>/.vscode/mcp.json` |
+| Workspace | `<project>/.vscode/.mcp.json` |
+| User (global) | `~/.config/Code/User/mcp.json` |
+
+VSCode nests servers under a top-level `"servers"` key rather than `"mcpServers"` — Tooldex parses that shape natively, no config changes needed on your end. `${input:...}` placeholders (VSCode's prompted-variable syntax) are left untouched since Tooldex doesn't drive VSCode's input UI; standard `${VAR}` / `$VAR` env references still resolve normally. All three paths are scanned independently — if more than one exists, servers from each are merged in.
+
+### Copilot CLI
+
+| Scope | Path |
+|---|---|
+| Global | `~/.copilot/mcp-config.json` |
+
+GitHub Copilot CLI's own config — separate from VSCode's Copilot chat extension above. Unlike VSCode, it uses the standard `"mcpServers"` key (same shape as Claude/Cursor), with a `"type": "local"` transport field and an optional `"tools"` allowlist array that Tooldex doesn't currently filter on — all of a server's discovered tools are shown regardless of what's listed there.
 
 ### MCP JSON (shared / team configs)
 
@@ -277,6 +295,7 @@ tooldex run [OPTIONS]
 | `--no-probe <name>` | — | Skip probing a specific server by name. Repeatable. |
 | `--config <path>` | — | Additional MCP config file to include. Repeatable. Custom configs are processed first and win on duplicate server IDs. |
 | `--no-cache` | off | Bypass the probe cache and re-probe every server live. |
+| `--no-security-scan` | off | Skip the automatic YARA security scan (see [Security scanning](#security-scanning)). Equivalent to `TOOLDEX_SECURITY_SCAN=false`, and also applies to later "rescan all" calls for the life of this server. |
 
 All flags accept both `--flag` and `-flag` prefix.
 
@@ -309,6 +328,9 @@ tooldex run --json | jq '.duplicates'
 
 # Force a live re-probe of every server, ignoring the probe cache
 tooldex run --no-cache
+
+# Skip the automatic YARA security scan entirely
+tooldex run --no-security-scan
 ```
 
 ---
@@ -373,9 +395,19 @@ Powered by [Cisco's MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner
 
 Runs automatically as part of every discovery and rescan, for every server. Local, free, no API key required, no configuration needed.
 
+**Every server is connected to twice per discovery/rescan** — once by Tooldex's own discovery probe (to call `tools/list` and populate the UI), and once independently by mcpscanner's `Scanner` (to fetch tool metadata for YARA analysis). These are two separate connections/process launches; mcpscanner doesn't expose a way to reuse tools Tooldex has already fetched. If the same server name is configured in multiple clients (e.g. both VSCode and Copilot CLI), each client's copy is scanned separately, so you may see more than 2 connections total for that server name.
+
 | Env var | Description | Default |
 |---|---|---|
+| `TOOLDEX_SECURITY_SCAN` | Set to `false` to disable the automatic YARA scan entirely (both at startup and on later "rescan all" calls). Same as passing `--no-security-scan`. | `true` |
 | `MCP_SCANNER_CONCURRENCY` | Maximum concurrent YARA scan calls. Distinct from `run`'s `--concurrency` flag, which controls tool-*probing* concurrency, not scanning. | `8` |
+
+`--no-security-scan` and `TOOLDEX_SECURITY_SCAN=false` are equivalent — either one disables the scan (the flag works by setting that env var for the process). Whenever the scan is skipped, Tooldex prints the reason to the CLI:
+
+```
+Security scan skipped — --no-security-scan flag was passed.
+Security scan skipped — TOOLDEX_SECURITY_SCAN is set to false.
+```
 
 ### AI security scan (LLM-as-judge, opt-in)
 
@@ -422,7 +454,7 @@ All endpoints respond with or without a trailing slash.
 | `GET` | `/api/health/` | `status`, current `timestamp`, and `uptime_seconds` since the server started |
 | `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file`, `has_llm_cache`, and the `security_*` fields below |
 | `GET` | `/api/servers/{id}/` | Single server with full tool detail |
-| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server and update its tools in place. `force=true` aborts an in-flight AI security scan on this server first; otherwise returns `409 {"error": "llm_scan_running"}` while one is running |
+| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server, update its tools in place, and (if the probe succeeds and `TOOLDEX_SECURITY_SCAN` isn't disabled) re-run its YARA scan too, so `security_scanned`/`security_risk` stay current. `force=true` aborts an in-flight AI security scan on this server first; otherwise returns `409 {"error": "llm_scan_running"}` while one is running |
 | `POST` | `/api/servers/{id}/llm-scan/` | Start the AI security scan for one server as a background job. `force` (default `true`) skips the cache and forces fresh LLM calls; results are cached either way |
 | `GET` | `/api/servers/{id}/llm-scan/status/` | Poll progress (`scanned`/`total`) and outcome of the AI security scan job for this server |
 | `POST` | `/api/servers/{id}/llm-scan/stop/` | Signal a running AI security scan to stop |

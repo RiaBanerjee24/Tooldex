@@ -10,6 +10,7 @@ from mcpscanner.core.models import AnalyzerEnum
 from mcpscanner.core.result import ToolScanResult
 from mcpscanner.core.scanner import StdioServer
 
+from tooldex._env_bool import env_flag_enabled
 from tooldex.scanner.config import build_config
 
 if TYPE_CHECKING:
@@ -23,6 +24,17 @@ _FREE_ANALYZERS = [
 def active_analyzers() -> list[AnalyzerEnum]:
     """Analyzers used by the automatic fleet-wide scan (scan_servers)."""
     return list(_FREE_ANALYZERS)
+
+
+def security_scan_enabled() -> bool:
+    """
+    Single source of truth for whether the automatic YARA scan should run at
+    all. TOOLDEX_SECURITY_SCAN=false disables it — checked both at startup
+    (cli.py) and on every rescan (api/routers/rescan.py). The --no-security-scan
+    CLI flag works by setting this env var for the process, so both call
+    sites stay in sync without duplicating the enable/disable logic.
+    """
+    return env_flag_enabled("TOOLDEX_SECURITY_SCAN", default=True)
 
 
 async def _scan_one(

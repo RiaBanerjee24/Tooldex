@@ -97,10 +97,21 @@ def run(
         False, "--no-cache",
         help="Bypass the probe cache and re-probe every server live.",
     ),
+    no_security_scan: bool = typer.Option(
+        False, "--no-security-scan", "-no-security-scan",
+        help=(
+            "Skip the automatic YARA security scan (connects to every server a second "
+            "time; this disables that second connection entirely). Equivalent to "
+            "TOOLDEX_SECURITY_SCAN=false, and also applies to later 'rescan all' calls "
+            "for the life of this server."
+        ),
+    ),
 ):
     """Autodiscover MCP servers and start the Tooldex UI. Options accept both -- and - prefix."""
     if as_json:
         no_serve = True
+    if no_security_scan:
+        os.environ["TOOLDEX_SECURITY_SCAN"] = "false"
 
     # ── permissions: agent CLI status commands ───────────────────────────────
     prefs = load_prefs()
@@ -198,14 +209,19 @@ def run(
         os.write(1, (payload + "\n").encode())
         raise typer.Exit(0)
 
-    from tooldex.scanner import scan_servers
-    probed_ids = {r.server_id for r in tool_results if r.ok}
-    servers_to_scan = {
-        sid: srv
-        for sid, srv in config_result.servers.items()
-        if sid in probed_ids
-    }
-    scan_results = scan_servers(servers_to_scan)
+    from tooldex.scanner import scan_servers, security_scan_enabled
+    if security_scan_enabled():
+        probed_ids = {r.server_id for r in tool_results if r.ok}
+        servers_to_scan = {
+            sid: srv
+            for sid, srv in config_result.servers.items()
+            if sid in probed_ids
+        }
+        scan_results = scan_servers(servers_to_scan)
+    else:
+        reason = "--no-security-scan flag was passed" if no_security_scan else "TOOLDEX_SECURITY_SCAN is set to false"
+        typer.secho(f"\n  Security scan skipped — {reason}.", fg="yellow")
+        scan_results = {}
 
     print_summary(config_result, tool_results)
 

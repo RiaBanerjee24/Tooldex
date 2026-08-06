@@ -67,10 +67,13 @@ def read_json(
     client: str,
     path: Optional[Path],
     env: Optional[dict[str, str]] = None,
+    key: str = "mcpServers",
 ) -> Optional[DiscoverySource]:
     """
     Read one JSON MCP config and return a DiscoverySource.
     Returns None when path is None (resolver found nothing applicable).
+    `key` lets callers handle configs that nest servers under a different
+    top-level name (e.g. VSCode uses "servers" instead of "mcpServers").
     """
     if path is None:
         return None
@@ -86,19 +89,19 @@ def read_json(
             error=f"Top-level JSON must be an object, got {type(raw).__name__}",
         )
 
-    if "mcpServers" not in raw:
+    if key not in raw:
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.EMPTY,
-            error='No "mcpServers" key — not an MCP config file',
+            error=f'No "{key}" key — not an MCP config file',
         )
 
-    if not isinstance(raw["mcpServers"], dict):
+    if not isinstance(raw[key], dict):
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-            error=f'"mcpServers" must be an object, got {type(raw["mcpServers"]).__name__}',
+            error=f'"{key}" must be an object, got {type(raw[key]).__name__}',
         )
 
-    servers = parse_mcp_servers(raw, path_str, env=env)
+    servers = parse_mcp_servers(raw, path_str, env=env, key=key)
     status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
     return DiscoverySource(
         client=client, path=path_str, status=status, servers=servers,

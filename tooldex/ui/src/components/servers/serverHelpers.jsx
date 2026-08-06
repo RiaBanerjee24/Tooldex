@@ -25,6 +25,10 @@ const CLIENT_META = {
     cursor_project:       { group: "Cursor",       label: "Cursor",       scope: "project" },
     codex:                { group: "Codex",        label: "Codex",        scope: "global" },
     codex_project:        { group: "Codex",        label: "Codex",        scope: "project" },
+    vscode_project:         { group: "VSCode", label: "VSCode", scope: "project", scopeLabel: "workspace" },
+    vscode_project_dotfile: { group: "VSCode", label: "VSCode", scope: "project", scopeLabel: "workspace" },
+    vscode_user:            { group: "VSCode", label: "VSCode", scope: "global",  scopeLabel: "user" },
+    copilot_cli_user:     { group: "Copilot",      label: "Copilot",      scope: "global" },
     mcp_json_user:        { group: "MCP JSON",     label: "MCP JSON",     scope: "global" },
     mcp_json_project:     { group: "MCP JSON",     label: "MCP JSON",     scope: "project" },
     antigravity_user:        { group: "Gemini",   label: "Gemini (Antigravity)",  scope: "global" },
@@ -37,7 +41,7 @@ const CLIENT_META = {
     custom:                  { group: "Custom",   label: "Custom",                scope: null },
 }
 
-const GROUP_ORDER = ["Claude", "Cursor", "Codex", "MCP JSON", "Gemini", "Docker MCP", "Custom"]
+const GROUP_ORDER = ["Claude", "Cursor", "Codex", "VSCode", "Copilot", "MCP JSON", "Gemini", "Docker MCP", "Custom"]
 
 export function classifyClient(client) {
     if (!client) return { group: "Unknown", label: "—", scope: null }
@@ -139,7 +143,7 @@ export function ConnectionStatusBadge({ status }) {
     )
 }
 
-export function ScopeTag({ scope }) {
+export function ScopeTag({ scope, label }) {
     if (!scope) return null
     const isProject = scope === "project"
     return (
@@ -149,6 +153,6 @@ export function ScopeTag({ scope }) {
             fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase",
             color: isProject ? "var(--lime-dim)" : "var(--text3)",
             fontFamily: "Menlo, Consolas, monospace", flexShrink: 0,
-        }}>{scope}</span>
+        }}>{label || scope}</span>
     )
 }

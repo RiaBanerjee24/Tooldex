@@ -45,29 +45,15 @@ async def list_servers():
     }
 
 
-@router.get("/servers/{server_id}")
-async def get_server(server_id: str):
-    manifest = get_parser().manifest
-    server = manifest.get_server(server_id)
-
-    if not server:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": f"Server '{server_id}' not found"},
-        )
-
-    agents_connected = manifest.server_agents_index.get(server_id, [])
-
-    return redact_server({
-        **server.model_dump(),
-        "agents_connected": agents_connected,
-        "has_llm_cache": has_llm_cache(server_id),
-    })
-
-
-@router.post("/servers/{server_id}/rescan")
+@router.post("/servers/{server_id:path}/rescan")
 async def rescan_server(server_id: str, force: bool = False):
-    """Re-probe a single server and update its discovered tools. Blocked while an LLM-judge scan is running unless force=true."""
+    """
+    Re-probe a single server, update its discovered tools, and (unless disabled
+    via TOOLDEX_SECURITY_SCAN/--no-security-scan) re-run its YARA security scan
+    too — keeps this server's CLEAN/no-scan state from going stale relative to
+    a tool list that just changed. Blocked while an LLM-judge scan is running
+    unless force=true.
+    """
     from tooldex.core.discovery.tool_discovery import list_tools_for
     from tooldex.core.models.server import DiscoveredToolLite
 
@@ -95,21 +81,43 @@ async def rescan_server(server_id: str, force: bool = False):
         DiscoveredToolLite(name=t.name, description=t.description, input_schema=t.input_schema)
         for t in result.tools
     ]
-    manifest.servers[server_id] = server.model_copy(update={
+    update = {
         "discovered_tools": new_tools,
         "probe_status": result.status.value,
         "probe_error": result.error or None,
-    })
+    }
+
+    from tooldex.scanner import security_scan_enabled
+    security_scanned = server.security_scanned
+    if security_scan_enabled() and result.ok:
+        from tooldex.scanner import scan_servers
+        from tooldex.core.discovery.to_manifest import _security_data, merge_security_findings
+        from tooldex._silenced import silenced
+
+        scan_results = await asyncio.to_thread(silenced, scan_servers, {server_id: server})
+        fresh_yara_findings, _ = _security_data(scan_results.get(server_id, []))
+        merged, worst = merge_security_findings(server.security_findings, fresh_yara_findings, analyzer="YARA")
+        security_scanned = server_id in scan_results
+        update.update({
+            "security_findings": merged,
+            "security_risk": worst,
+            "security_scanned": security_scanned,
+        })
+    elif not security_scan_enabled():
+        print(f"\n  Security scan skipped for '{server.name}' — TOOLDEX_SECURITY_SCAN is set to false.", flush=True)
+
+    manifest.servers[server_id] = server.model_copy(update=update)
 
     return {
         "status": result.status.value,
         "tool_count": len(new_tools),
         "error": result.error,
         "duration_ms": result.duration_ms,
+        "security_scanned": security_scanned,
     }
 
 
-@router.post("/servers/{server_id}/llm-scan")
+@router.post("/servers/{server_id:path}/llm-scan")
 async def llm_scan_server(server_id: str, force: bool = True):
     """
     Start the LLM-as-judge analyzer for one server as a background job. Poll
@@ -136,7 +144,7 @@ async def llm_scan_server(server_id: str, force: bool = True):
     return {"status": "started", "total": job.total}
 
 
-@router.get("/servers/{server_id}/llm-scan/status")
+@router.get("/servers/{server_id:path}/llm-scan/status")
 async def llm_scan_status(server_id: str):
     """Poll progress of a running (or just-finished) LLM-judge job for this server."""
     job = get_job(server_id)
@@ -152,7 +160,7 @@ async def llm_scan_status(server_id: str):
     }
 
 
-@router.post("/servers/{server_id}/llm-scan/stop")
+@router.post("/servers/{server_id:path}/llm-scan/stop")
 async def llm_scan_stop(server_id: str):
     """Signal a running LLM-judge job to stop."""
     job = get_job(server_id)
@@ -162,7 +170,7 @@ async def llm_scan_stop(server_id: str):
     return {"status": "stopping"}
 
 
-@router.post("/servers/{server_id}/llm-scan/invalidate-cache")
+@router.post("/servers/{server_id:path}/llm-scan/invalidate-cache")
 async def llm_scan_invalidate_cache(server_id: str):
     """
     Remove all cached LLM-judge verdicts for this server and reset its
@@ -188,3 +196,27 @@ async def llm_scan_invalidate_cache(server_id: str):
         })
 
     return {"status": "ok", "removed": removed}
+
+
+# Registered last (and uses the greedy `:path` converter) so it doesn't shadow
+# the more specific /servers/{server_id}/... GET routes above — Starlette
+# matches routes in registration order, and this pattern would otherwise
+# swallow any sub-path as part of server_id.
+@router.get("/servers/{server_id:path}")
+async def get_server(server_id: str):
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+
+    if not server:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": f"Server '{server_id}' not found"},
+        )
+
+    agents_connected = manifest.server_agents_index.get(server_id, [])
+
+    return redact_server({
+        **server.model_dump(),
+        "agents_connected": agents_connected,
+        "has_llm_cache": has_llm_cache(server_id),
+    })

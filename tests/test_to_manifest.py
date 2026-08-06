@@ -1,11 +1,13 @@
 """Unit tests for tooldex/core/discovery/to_manifest.py."""
+from types import SimpleNamespace
+
 from tooldex.core.discovery.results import (
     ConfigDetectionResult,
     DiscoveredTool,
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
-from tooldex.core.discovery.to_manifest import build_manifest
+from tooldex.core.discovery.to_manifest import _security_data, build_manifest, merge_security_findings
 from tooldex.core.models.server import MCPServer
 
 
@@ -96,3 +98,74 @@ class TestBuildManifest:
                                   tools=[DiscoveredTool(name="t", server_id="a:fs")])],
         )
         assert original.discovered_tools == []
+
+
+def _scan_result(tool_name="t1", severity=None, analyzer="YARA"):
+    findings = [] if severity is None else [
+        SimpleNamespace(severity=severity, analyzer=analyzer, threat_category="secrets", summary="s")
+    ]
+    return SimpleNamespace(tool_name=tool_name, is_safe=not findings, findings=findings)
+
+
+class TestSecurityData:
+    def test_no_findings_returns_empty_and_none(self):
+        findings, worst = _security_data([_scan_result("t1")])
+        assert findings == []
+        assert worst is None
+
+    def test_single_finding(self):
+        findings, worst = _security_data([_scan_result("t1", "HIGH")])
+        assert len(findings) == 1
+        assert findings[0]["tool_name"] == "t1"
+        assert findings[0]["severity"] == "HIGH"
+        assert worst == "HIGH"
+
+    def test_worst_severity_wins_across_multiple_tools(self):
+        results = [_scan_result("t1", "LOW"), _scan_result("t2", "CRITICAL")]
+        findings, worst = _security_data(results)
+        assert len(findings) == 2
+        assert worst == "CRITICAL"
+
+    def test_safe_tools_contribute_no_findings(self):
+        findings, worst = _security_data([_scan_result("t1"), _scan_result("t2", "MEDIUM")])
+        assert len(findings) == 1
+        assert worst == "MEDIUM"
+
+
+class TestMergeSecurityFindings:
+    def test_defaults_to_replacing_llm_analyzer(self):
+        existing = [
+            {"tool_name": "t1", "severity": "HIGH", "analyzer": "YARA"},
+            {"tool_name": "t1", "severity": "LOW", "analyzer": "LLM"},
+        ]
+        new_llm = [{"tool_name": "t1", "severity": "CRITICAL", "analyzer": "LLM"}]
+        merged, worst = merge_security_findings(existing, new_llm)
+        analyzers = [(f["analyzer"], f["severity"]) for f in merged]
+        assert ("YARA", "HIGH") in analyzers
+        assert ("LLM", "CRITICAL") in analyzers
+        assert ("LLM", "LOW") not in analyzers
+        assert worst == "CRITICAL"
+
+    def test_explicit_analyzer_replaces_only_that_analyzer(self):
+        existing = [
+            {"tool_name": "t1", "severity": "LOW", "analyzer": "YARA"},
+            {"tool_name": "t1", "severity": "MEDIUM", "analyzer": "LLM"},
+        ]
+        fresh_yara = [{"tool_name": "t1", "severity": "CRITICAL", "analyzer": "YARA"}]
+        merged, worst = merge_security_findings(existing, fresh_yara, analyzer="YARA")
+        analyzers = [(f["analyzer"], f["severity"]) for f in merged]
+        assert ("LLM", "MEDIUM") in analyzers  # untouched
+        assert ("YARA", "CRITICAL") in analyzers
+        assert ("YARA", "LOW") not in analyzers  # replaced
+        assert worst == "CRITICAL"
+
+    def test_empty_new_findings_clears_that_analyzer(self):
+        existing = [{"tool_name": "t1", "severity": "HIGH", "analyzer": "YARA"}]
+        merged, worst = merge_security_findings(existing, [], analyzer="YARA")
+        assert merged == []
+        assert worst is None
+
+    def test_no_findings_at_all_returns_none_worst(self):
+        merged, worst = merge_security_findings([], [])
+        assert merged == []
+        assert worst is None

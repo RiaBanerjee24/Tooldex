@@ -4,26 +4,12 @@ import json as _json
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from tooldex._silenced import silenced as _silenced
 from tooldex.core.parsers.parser import store_discovery_sources
 
 router = APIRouter()
 
 _rescan_lock = asyncio.Lock()
-
-
-def _silenced(fn, *args, **kwargs):
-    """Run fn(*args) with stdout+stderr redirected to /dev/null."""
-    import os
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    saved_out, saved_err = os.dup(1), os.dup(2)
-    os.dup2(devnull, 1)
-    os.dup2(devnull, 2)
-    os.close(devnull)
-    try:
-        return fn(*args, **kwargs)
-    finally:
-        os.dup2(saved_out, 1); os.close(saved_out)
-        os.dup2(saved_err, 2); os.close(saved_err)
 
 
 @router.post("/rescan")
@@ -37,7 +23,7 @@ async def rescan(request: Request):
         from tooldex.core.discovery.to_manifest import build_manifest
         from tooldex.core.parsers.parser import init_parser_from_manifest
         from tooldex._cli_output import print_summary, print_banner
-        from tooldex.scanner import scan_servers
+        from tooldex.scanner import scan_servers, security_scan_enabled
         import sys
 
         try:
@@ -55,13 +41,19 @@ async def rescan(request: Request):
         except asyncio.TimeoutError:
             return {"status": "timeout", "error": "Rescan exceeded 120s limit"}
 
-        probed_ids = {r.server_id for r in tool_results if r.ok}
-        scan_targets = {
-            sid: srv
-            for sid, srv in config_result.servers.items()
-            if sid in probed_ids
-        }
-        scan_results = await asyncio.to_thread(_silenced, scan_servers, scan_targets)
+        if security_scan_enabled():
+            probed_ids = {r.server_id for r in tool_results if r.ok}
+            scan_targets = {
+                sid: srv
+                for sid, srv in config_result.servers.items()
+                if sid in probed_ids
+            }
+            scan_results = await asyncio.to_thread(_silenced, scan_servers, scan_targets)
+        else:
+            # Same env var whether it came from a persisted --no-security-scan or was
+            # set directly — no separate "flag" signal survives past process startup.
+            print("\n  Security scan skipped — TOOLDEX_SECURITY_SCAN is set to false.", flush=True)
+            scan_results = {}
 
         manifest = build_manifest(config_result, tool_results, scan_results)
         from tooldex.scanner import hydrate_llm_cache

@@ -1,5 +1,7 @@
 """Unit tests for tooldex/core/discovery/config_detector.py."""
 import json
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -95,3 +97,119 @@ class TestDetectAll:
     def test_returns_config_detection_result_instance(self, tmp_path):
         result = detect_all(cwd=tmp_path, env={}, auto_detect=False)
         assert isinstance(result, ConfigDetectionResult)
+
+    def test_vscode_project_mcp_json_discovered(self, tmp_path, monkeypatch):
+        # detect_all reads several global configs (~/.claude.json, ~/.codex/...)
+        # from the real home dir unless isolated — point it at an empty tmp
+        # home so this stays hermetic.
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: home)
+
+        # project must live under the fake home so walk_up_for's home-stop
+        # condition actually triggers, keeping the walk-up hermetic.
+        project = home / "project"
+        vscode_dir = project / ".vscode"
+        vscode_dir.mkdir(parents=True)
+        (vscode_dir / "mcp.json").write_text(json.dumps({
+            "servers": {
+                "desktop-commander": {"type": "stdio", "command": "npx", "args": ["pkg"]},
+            },
+        }))
+
+        # Never shell out to a real `docker` binary from a unit test.
+        with patch("tooldex.core.discovery.config_detector.read_all_docker_mcp_profiles", return_value=[]):
+            result = detect_all(
+                cwd=project, env={},
+                allow_claude_status=False, allow_codex_status=False, allow_cursor_status=False,
+            )
+        assert "vscode_project:desktop-commander" in result.servers
+        assert result.servers["vscode_project:desktop-commander"].command == "npx"
+
+    def test_vscode_project_dotfile_mcp_json_also_discovered(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: home)
+
+        project = home / "project"
+        vscode_dir = project / ".vscode"
+        vscode_dir.mkdir(parents=True)
+        (vscode_dir / "mcp.json").write_text(json.dumps({
+            "servers": {"fs": {"type": "stdio", "command": "npx", "args": ["pkg-a"]}},
+        }))
+        (vscode_dir / ".mcp.json").write_text(json.dumps({
+            "servers": {"gh": {"type": "stdio", "command": "npx", "args": ["pkg-b"]}},
+        }))
+
+        with patch("tooldex.core.discovery.config_detector.read_all_docker_mcp_profiles", return_value=[]):
+            result = detect_all(
+                cwd=project, env={},
+                allow_claude_status=False, allow_codex_status=False, allow_cursor_status=False,
+            )
+        # Both files are scanned independently — neither shadows the other.
+        assert "vscode_project:fs" in result.servers
+        assert "vscode_project_dotfile:gh" in result.servers
+
+    def test_vscode_user_global_config_discovered(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: home)
+
+        vscode_user_dir = home / ".config" / "Code" / "User"
+        vscode_user_dir.mkdir(parents=True)
+        (vscode_user_dir / "mcp.json").write_text(json.dumps({
+            "servers": {
+                "oraios/serena": {
+                    "type": "stdio", "command": "uvx",
+                    "args": ["--from", "git+https://github.com/oraios/serena", "serena"],
+                },
+                "io.github.netdata/mcp-server": {
+                    "type": "http", "url": "https://app.netdata.cloud/api/v1/mcp",
+                    "headers": {"Authorization": "Bearer ${input:NETDATA_CLOUD_API_TOKEN}"},
+                },
+            },
+        }))
+
+        with patch("tooldex.core.discovery.config_detector.read_all_docker_mcp_profiles", return_value=[]):
+            result = detect_all(
+                cwd=home, env={},
+                allow_claude_status=False, allow_codex_status=False, allow_cursor_status=False,
+            )
+
+        assert result.servers["vscode_user:oraios/serena"].command == "uvx"
+        server = result.servers["vscode_user:io.github.netdata/mcp-server"]
+        assert server.transport == "http"
+        # Unresolved ${input:...} placeholder passes through untouched.
+        assert server.headers["Authorization"] == "Bearer ${input:NETDATA_CLOUD_API_TOKEN}"
+
+    def test_copilot_cli_config_uses_standard_mcp_servers_key(self, tmp_path, monkeypatch):
+        # Unlike VSCode's "servers"-keyed shape, Copilot CLI's mcp-config.json
+        # uses the standard "mcpServers" key with a "type": "local" transport
+        # and an ignored "tools" allowlist field.
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: home)
+
+        copilot_cli_dir = home / ".copilot"
+        copilot_cli_dir.mkdir(parents=True)
+        (copilot_cli_dir / "mcp-config.json").write_text(json.dumps({
+            "mcpServers": {
+                "ruflo": {
+                    "tools": ["*"],
+                    "type": "local",
+                    "command": "npx",
+                    "args": ["ruflo@latest", "mcp", "start"],
+                },
+            },
+        }))
+
+        with patch("tooldex.core.discovery.config_detector.read_all_docker_mcp_profiles", return_value=[]):
+            result = detect_all(
+                cwd=home, env={},
+                allow_claude_status=False, allow_codex_status=False, allow_cursor_status=False,
+            )
+
+        server = result.servers["copilot_cli_user:ruflo"]
+        assert server.transport == "stdio"
+        assert server.command == "npx"
+        assert server.args == ["ruflo@latest", "mcp", "start"]

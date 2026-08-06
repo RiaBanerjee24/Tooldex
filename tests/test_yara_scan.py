@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from mcpscanner.core.models import AnalyzerEnum
 
-from tooldex.scanner.yara_scan import _scan_one, active_analyzers, scan_servers
+from tooldex.scanner.yara_scan import _scan_one, active_analyzers, scan_servers, security_scan_enabled
 
 
 def _stdio_server():
@@ -28,6 +28,22 @@ class TestActiveAnalyzers:
         result = active_analyzers()
         result.append("mutated")
         assert active_analyzers() == [AnalyzerEnum.YARA]
+
+
+class TestSecurityScanEnabled:
+    def test_enabled_by_default_when_unset(self, monkeypatch):
+        monkeypatch.delenv("TOOLDEX_SECURITY_SCAN", raising=False)
+        assert security_scan_enabled() is True
+
+    @pytest.mark.parametrize("value", ["false", "False", "FALSE", "0", "no", "off"])
+    def test_disabled_by_falsy_values(self, monkeypatch, value):
+        monkeypatch.setenv("TOOLDEX_SECURITY_SCAN", value)
+        assert security_scan_enabled() is False
+
+    @pytest.mark.parametrize("value", ["true", "1", "yes", "anything-else"])
+    def test_enabled_by_other_values(self, monkeypatch, value):
+        monkeypatch.setenv("TOOLDEX_SECURITY_SCAN", value)
+        assert security_scan_enabled() is True
 
 
 class TestScanServers:

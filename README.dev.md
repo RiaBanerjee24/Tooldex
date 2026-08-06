@@ -94,14 +94,14 @@ MCP client config files (.json, .toml)
 2. Claude Code global (`~/.claude.json`) — special two-level format
 3. Codex project (`.codex/config.toml`, walk up from cwd)
 4. Codex global (`~/.codex/config.toml`)
-5. Claude Code project, Cursor project/global, MCP JSON project/global (`.mcp.json` and bare `mcp.json`), Agents (`.agents/mcp.json` and `.agents/.mcp.json`, project and global), Gemini Antigravity (`~/.gemini/antigravity/mcp_config.json`) — all via `build_plan()`
+5. Claude Code project, Cursor project/global, VSCode workspace/user (`.vscode/mcp.json`, `.vscode/.mcp.json`, `~/.config/Code/User/mcp.json` — all three nest servers under `"servers"` instead of `"mcpServers"`, see `CLIENT_SERVERS_KEY`), Copilot CLI global (`~/.copilot/mcp-config.json` — standard `"mcpServers"` key, unlike VSCode), MCP JSON project/global (`.mcp.json` and bare `mcp.json`), Agents (`.agents/mcp.json` and `.agents/.mcp.json`, project and global), Gemini Antigravity (`~/.gemini/antigravity/mcp_config.json`) — all via `build_plan()`
 6. Docker MCP Toolkit profiles (via `docker mcp profile ls`)
 
 **Qualified IDs** prevent cross-client collisions. Every server gets a key in the form `{client}:{server_id}`, e.g. `claude_code_user:browserbase` and `cursor_user:browserbase` are distinct entries and both survive. Project-scoped Claude Code servers use a three-part key: `claude_code_project:{md5_slug}:{server_id}`.
 
 **First-sighting wins** within the same client — in-file duplicates are detected via `object_pairs_hook` in `json5.loads()` and recorded in `DiscoverySource.in_file_duplicates`.
 
-**JSON5 / JSONC support** — `_readers.py` uses `json5.loads()` instead of `json.loads()`, so config files containing `//` line comments, `/* block */` comments, and trailing commas are parsed without error. This covers common formats emitted by VS Code-family editors and tools like Godot MCP.
+**JSON5 / JSONC support** — `_readers.py` uses `json5.loads()` instead of `json.loads()`, so config files containing `//` line comments, `/* block */` comments, and trailing commas are parsed without error. This covers common formats emitted by VSCode-family editors and tools like Godot MCP.
 
 **`serverUrl` alias** — `_spec_to_server()` in `_parsers.py` treats `serverUrl` as a fallback for `url` to support the Gemini Antigravity IDE remote server format.
 
@@ -218,7 +218,7 @@ Lightweight tool record from live probing: `name`, `description`, `input_schema`
 
 ### Routers
 
-**`servers.py`**: `list_servers` returns all MCP servers with `tool_count`, `source_file`, `has_llm_cache`, `total_servers`, `total_tools`. `get_server` looks up a single server by qualified ID. `rescan_server` re-probes a single server via `asyncio.to_thread()` and updates the in-memory manifest entry (blocked with `409` while an LLM-judge job is running on that server, unless `force=true`). The `llm-scan`/`llm-scan/status`/`llm-scan/stop`/`llm-scan/invalidate-cache` endpoints wrap `api/llm_jobs.py` — see [Security scanning](#security-scanning). Both `servers.py` and `api/llm_jobs.py` import `redact.py`'s `redact_server()`/`friendly_path()` to strip secrets before a payload leaves the process.
+**`servers.py`**: `list_servers` returns all MCP servers with `tool_count`, `source_file`, `has_llm_cache`, `total_servers`, `total_tools`. `get_server` looks up a single server by qualified ID. `rescan_server` re-probes a single server via `asyncio.to_thread()` and updates the in-memory manifest entry (blocked with `409` while an LLM-judge job is running on that server, unless `force=true`). If the probe succeeds and `security_scan_enabled()` is true, it also re-runs a YARA scan scoped to just that server (`scan_servers({server_id: server})`) and merges the fresh findings in via `to_manifest.merge_security_findings(..., analyzer="YARA")` — this replaces only the YARA-sourced findings, leaving any cached LLM-judge findings on that server untouched. If the probe fails, or security scanning is disabled, `security_scanned`/`security_risk`/`security_findings` are left exactly as they were (not reset). The `llm-scan`/`llm-scan/status`/`llm-scan/stop`/`llm-scan/invalidate-cache` endpoints wrap `api/llm_jobs.py` — see [Security scanning](#security-scanning). Both `servers.py` and `api/llm_jobs.py` import `redact.py`'s `redact_server()`/`friendly_path()` to strip secrets before a payload leaves the process.
 
 **`files.py`**: Returns `_discovery_sources` — the list of every config file checked, with path, client, status, server IDs found, and any parse error.
 
@@ -239,7 +239,9 @@ All `_status_*.py` subprocess calls pass `stdin=subprocess.DEVNULL` to prevent C
 
 Powered by [Cisco's MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner) (`mcpscanner` on PyPI) via `tooldex/scanner/`.
 
-**YARA** (`yara_scan.py`) is the only entry in `active_analyzers()` — it runs automatically as part of every discovery and rescan, for every server. `scan_servers()` builds one `mcpscanner.Scanner` per call (via `config.build_config()`) and fans out across servers under an `asyncio.Semaphore` (`MCP_SCANNER_CONCURRENCY`, default 8).
+**YARA** (`yara_scan.py`) is the only entry in `active_analyzers()` — it runs automatically as part of every discovery and rescan, for every server. `scan_servers()` builds one `mcpscanner.Scanner` per call (via `config.build_config()`) and fans out across servers under an `asyncio.Semaphore` (`MCP_SCANNER_CONCURRENCY`, default 8). Note this means every server gets connected to twice per discovery/rescan — once by `tool_discovery.py`'s own probe, once independently by mcpscanner's `Scanner` — since mcpscanner's public API (`scan_stdio_server_tools`/`scan_remote_server_tools`) always connects and lists tools itself; there's no supported way to hand it tools Tooldex already fetched (its `_analyze_tool()` internal *would* accept pre-fetched `mcp.types.Tool` objects, but it's a private, undocumented method not safe to depend on across mcpscanner versions).
+
+`security_scan_enabled()` (`TOOLDEX_SECURITY_SCAN`, default `true`) is the single source of truth for whether the YARA pass runs at all — checked in `cli.py`'s `run()`, `rescan.py`'s `POST /api/rescan/`, and `servers.py`'s per-server `POST /api/servers/{id}/rescan/`. `run`'s `--no-security-scan` flag works by setting that env var on the process at startup rather than threading a separate flag through every call site. It's implemented in `tooldex/_env_bool.py` (a dependency-free module, deliberately outside `tooldex/scanner/`, so `cli.py` can check it before the `--json` fast path without importing the heavier `mcpscanner`-backed scanner package).
 
 **AI security scan** (`llm_judge.py`) is opt-in and per-server only — `run_llm_judge_scan()` is never called from `scan_servers()`, only from the `/api/servers/{id}/llm-scan/*` routes via `api/llm_jobs.py`'s `LlmJudgeJob`/`run_llm_judge_job()`. Tooldex's AI security scan is powered by Cisco AI Defense's open-source mcpscanner SDK, running entirely locally — the only network call it makes is to whichever LLM provider you configure. Key behaviors:
 

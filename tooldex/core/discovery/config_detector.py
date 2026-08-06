@@ -13,6 +13,7 @@ from typing import Optional
 from tooldex.core.discovery._readers import read_json, read_claude_json, read_codex_toml
 from tooldex.core.discovery._paths import (
     CLIENT_PRIORITY,
+    CLIENT_SERVERS_KEY,
     build_plan,
     codex_project_path,
     codex_user_path,
@@ -93,7 +94,7 @@ def detect_all(
             logger.warning("Path resolution failed for %s: %s", client, exc)
             continue
 
-        source = read_json(client, path, env=env)
+        source = read_json(client, path, env=env, key=CLIENT_SERVERS_KEY.get(client, "mcpServers"))
         if source is None:
             continue
         result.sources.append(source)

@@ -103,6 +103,95 @@ class TestNoServeMode:
         assert "No servers discovered" in result.stdout
         mock_uvicorn.assert_not_called()
 
+    def test_no_security_scan_flag_skips_yara_scan_and_reports_reason(self):
+        config = ConfigDetectionResult(servers={"custom:fs": MCPServer(id="custom:fs", name="fs")})
+        probe_ok = ToolDiscoveryResult(server_id="custom:fs", status=ToolDiscoveryStatus.FOUND)
+        patches = _patched(
+            detect_all=patch.object(cli_module, "detect_all", return_value=config),
+            list_tools_for_all=patch.object(cli_module, "list_tools_for_all", return_value=[probe_ok]),
+        )
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"] as mock_scan, patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve", "--no-security-scan"])
+
+        assert result.exit_code == 0, result.stdout
+        mock_scan.assert_not_called()
+        assert "Security scan skipped" in result.stdout
+        assert "flag was passed" in result.stdout
+
+    def test_no_security_scan_single_dash_alias_also_works(self):
+        config = ConfigDetectionResult(servers={"custom:fs": MCPServer(id="custom:fs", name="fs")})
+        probe_ok = ToolDiscoveryResult(server_id="custom:fs", status=ToolDiscoveryStatus.FOUND)
+        patches = _patched(
+            detect_all=patch.object(cli_module, "detect_all", return_value=config),
+            list_tools_for_all=patch.object(cli_module, "list_tools_for_all", return_value=[probe_ok]),
+        )
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"] as mock_scan, patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve", "-no-security-scan"])
+
+        assert result.exit_code == 0, result.stdout
+        mock_scan.assert_not_called()
+
+    def test_env_var_disabled_without_flag_reports_env_var_reason(self, monkeypatch):
+        monkeypatch.setenv("TOOLDEX_SECURITY_SCAN", "false")
+        config = ConfigDetectionResult(servers={"custom:fs": MCPServer(id="custom:fs", name="fs")})
+        probe_ok = ToolDiscoveryResult(server_id="custom:fs", status=ToolDiscoveryStatus.FOUND)
+        patches = _patched(
+            detect_all=patch.object(cli_module, "detect_all", return_value=config),
+            list_tools_for_all=patch.object(cli_module, "list_tools_for_all", return_value=[probe_ok]),
+        )
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"] as mock_scan, patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve"])
+
+        assert result.exit_code == 0, result.stdout
+        mock_scan.assert_not_called()
+        assert "Security scan skipped" in result.stdout
+        assert "TOOLDEX_SECURITY_SCAN is set to false" in result.stdout
+
+    def test_env_var_true_and_flag_not_passed_runs_scan(self, monkeypatch):
+        monkeypatch.setenv("TOOLDEX_SECURITY_SCAN", "true")
+        config = ConfigDetectionResult(servers={"custom:fs": MCPServer(id="custom:fs", name="fs")})
+        probe_ok = ToolDiscoveryResult(server_id="custom:fs", status=ToolDiscoveryStatus.FOUND)
+        patches = _patched(
+            detect_all=patch.object(cli_module, "detect_all", return_value=config),
+            list_tools_for_all=patch.object(cli_module, "list_tools_for_all", return_value=[probe_ok]),
+        )
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"] as mock_scan, patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve"])
+
+        assert result.exit_code == 0, result.stdout
+        mock_scan.assert_called_once()
+        assert "Security scan skipped" not in result.stdout
+
+    def test_env_var_true_but_flag_passed_skips_scan(self, monkeypatch):
+        monkeypatch.setenv("TOOLDEX_SECURITY_SCAN", "true")
+        config = ConfigDetectionResult(servers={"custom:fs": MCPServer(id="custom:fs", name="fs")})
+        probe_ok = ToolDiscoveryResult(server_id="custom:fs", status=ToolDiscoveryStatus.FOUND)
+        patches = _patched(
+            detect_all=patch.object(cli_module, "detect_all", return_value=config),
+            list_tools_for_all=patch.object(cli_module, "list_tools_for_all", return_value=[probe_ok]),
+        )
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"] as mock_scan, patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve", "--no-security-scan"])
+
+        assert result.exit_code == 0, result.stdout
+        mock_scan.assert_not_called()
+        assert "flag was passed" in result.stdout
+
     def test_no_probe_skips_named_servers(self):
         config = ConfigDetectionResult(servers={
             "custom:fs": MCPServer(id="custom:fs", name="fs"),

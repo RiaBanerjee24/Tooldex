@@ -84,10 +84,10 @@ def _security_data(tool_scan_results: list) -> tuple[list[dict], Optional[str]]:
 
 
 def merge_security_findings(
-    existing_findings: list[dict], new_llm_findings: list[dict]
+    existing_findings: list[dict], new_findings: list[dict], analyzer: str = "LLM"
 ) -> tuple[list[dict], Optional[str]]:
-    """Replace a server's LLM-analyzer findings with new_llm_findings, leaving other analyzers' findings untouched. Returns (merged, worst_severity)."""
-    merged = [f for f in existing_findings if f.get("analyzer") != "LLM"] + new_llm_findings
+    """Replace a server's `analyzer`-sourced findings with new_findings, leaving other analyzers' findings untouched. Returns (merged, worst_severity)."""
+    merged = [f for f in existing_findings if f.get("analyzer") != analyzer] + new_findings
     worst = min(
         (f["severity"] for f in merged),
         key=lambda s: _SEVERITY_RANK.get(s.upper(), 99),

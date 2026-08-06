@@ -6,6 +6,7 @@ YARA (yara_scan.py) runs automatically on every scan. The LLM judge
 part of the automatic fleet-wide scan.
 
 Env vars:
+  TOOLDEX_SECURITY_SCAN              — set to "false" to disable the automatic YARA scan entirely (default: true)
   MCP_SCANNER_CONCURRENCY            — max servers scanned in parallel (default: 8)
   TOOLDEX_LLM_API_KEY                — enables the per-server LLM judge
   TOOLDEX_LLM_MODEL                  — model to use (e.g. gpt-4o, claude-3-5-sonnet)
@@ -19,7 +20,10 @@ Env vars:
 Each also accepts its original mcpscanner name (MCP_SCANNER_LLM_*) as a
 fallback — see config._env_with_legacy_fallback.
 """
-from tooldex.scanner.yara_scan import scan_servers, active_analyzers
+from tooldex.scanner.yara_scan import scan_servers, active_analyzers, security_scan_enabled
 from tooldex.scanner.llm_judge import run_llm_judge_scan, hydrate_llm_cache
 
-__all__ = ["scan_servers", "active_analyzers", "run_llm_judge_scan", "hydrate_llm_cache"]
+__all__ = [
+    "scan_servers", "active_analyzers", "security_scan_enabled",
+    "run_llm_judge_scan", "hydrate_llm_cache",
+]
