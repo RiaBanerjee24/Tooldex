@@ -260,11 +260,11 @@ Powered by [Cisco's MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner
 Single source of truth: `pyproject.toml`.
 
 ```
-pyproject.toml          version = "0.1.1"
+pyproject.toml          version = "1.0.1"
     ↓ (hatchling reads at build time)
 installed package metadata
     ↓ (importlib.metadata.version("tooldex") at runtime)
-tooldex.__version__    "0.1.1"
+tooldex.__version__    "1.0.1"
     ↓
 cli.py                  --version flag, startup banner
 api/app.py              FastAPI app version field

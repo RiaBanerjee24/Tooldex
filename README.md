@@ -79,7 +79,7 @@ Tooldex scans config files, probes each discovered server for its tool surface, 
 
 ```
   ╔══════════════════════════════════════════════════╗
-  ║         tooldex  v0.1.1                         ║
+  ║         tooldex  v1.0.1                         ║
   ╠══════════════════════════════════════════════════╣
   ║  Servers  12                                     ║
   ║  Tools    187                                    ║
