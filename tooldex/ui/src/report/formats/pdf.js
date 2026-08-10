@@ -1,14 +1,14 @@
 // report/formats/pdf.js
-// PdfGenerator — multi-page A4 PDF report in two modes:
-//   mode: 'summary' — server names + descriptions, tool names + severity, security overview
-//   mode: 'full'    — tool descriptions, inline security findings per tool, full findings table
+// PdfGenerator — multi-page A4 PDF report: servers + tool descriptions, plus
+// an optional Security Findings section (servers/tools with findings only).
 //
-// Implements the generator interface: generate(reportData) → void (triggers download).
+// Implements the generator interface: generate(reportData, options) → void (triggers download).
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { LOGO_POLYGONS } from '../../assets/logo.js'
-import { fmtDateTime } from '../builder.js'
+import { fmtDateTime, serverCommandLine } from '../builder.js'
+import { groupServers } from '../../components/servers/serverHelpers.jsx'
 
 // ── colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -23,7 +23,6 @@ const C = {
     tableHead:    [30,  41,  59],
     tableHeadTxt: [241, 245, 249],
     tableRowAlt:  [248, 250, 252],
-    findingRow:   [252, 252, 250],
     borderColor:  [226, 232, 240],
     accentLime:   [138, 154, 40],
     sevCritical:  [185, 28,  28],
@@ -33,8 +32,6 @@ const C = {
     sevInfo:      [148, 163, 184],
 }
 
-const _SEV_RANK = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 }
-
 function sevColor(sev) {
     switch ((sev || '').toUpperCase()) {
         case 'CRITICAL': return C.sevCritical
@@ -43,13 +40,6 @@ function sevColor(sev) {
         case 'LOW':      return C.sevLow
         default:         return C.sevInfo
     }
-}
-
-function worstSev(findings) {
-    if (!findings.length) return null
-    return findings.reduce((a, b) =>
-        (_SEV_RANK[a.severity?.toUpperCase()] ?? 99) <= (_SEV_RANK[b.severity?.toUpperCase()] ?? 99) ? a : b
-    ).severity
 }
 
 function hexToRgb(hex) {
@@ -135,18 +125,18 @@ function runTable(doc, startY, head, body, columnStyles = {}, extraOpts = {}) {
 }
 
 // ── footer ────────────────────────────────────────────────────────────────────
-function addFooters(doc, dateStr, totalPages, modeName) {
+function addFooters(doc, dateStr, totalPages) {
     for (let i = 2; i <= totalPages; i++) {
         doc.setPage(i)
         hline(doc, PAGE_H - 12, C.borderColor)
         setFont(doc, 7, 'normal', C.mutedText)
-        doc.text(`Tooldex ${modeName} Report  ·  Generated ${dateStr}`, MARGIN, PAGE_H - 7)
+        doc.text(`Tooldex Report  ·  Generated ${dateStr}`, MARGIN, PAGE_H - 7)
         doc.text(`Page ${i} of ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 7, { align: 'right' })
     }
 }
 
 // ── cover ─────────────────────────────────────────────────────────────────────
-function buildCover(doc, meta, modeName) {
+function buildCover(doc, meta, scopeTitle) {
     doc.setFillColor(...C.coverBg)
     doc.rect(0, 0, PAGE_W, PAGE_H, 'F')
 
@@ -156,7 +146,7 @@ function buildCover(doc, meta, modeName) {
     doc.text('Tooldex', PAGE_W / 2, 122, { align: 'center' })
 
     setFont(doc, 13, 'normal', C.coverAccent)
-    doc.text(`Security & Discovery Report — ${modeName}`, PAGE_W / 2, 133, { align: 'center' })
+    doc.text(`Security & Discovery Report — ${scopeTitle}`, PAGE_W / 2, 133, { align: 'center' })
 
     doc.setDrawColor(...C.accentLime)
     doc.setLineWidth(0.4)
@@ -228,7 +218,7 @@ function sectionHeading(doc, title, subtitle = null) {
     return y + 10
 }
 
-// ── shared sections (both modes) ──────────────────────────────────────────────
+// ── sections ──────────────────────────────────────────────────────────────────
 function buildOverview(doc, summary) {
     const startY = sectionHeading(doc, 'Overview', 'Consolidated scan summary')
     runTable(doc, startY,
@@ -248,8 +238,8 @@ function buildOverview(doc, summary) {
 function buildAgents(doc, agents) {
     const startY = sectionHeading(doc, 'AI Agents', 'MCP clients detected')
     runTable(doc, startY,
-        [['Client', 'Servers', 'Tools']],
-        agents.map(a => [a.client, String(a.serverCount), String(a.toolCount)]),
+        [['Agent', 'Servers', 'Tools']],
+        agents.map(a => [a.agent, String(a.serverCount), String(a.toolCount)]),
         {
             0: { cellWidth: 110 },
             1: { cellWidth: 40, halign: 'right' },
@@ -258,229 +248,70 @@ function buildAgents(doc, agents) {
     )
 }
 
-// ── SUMMARY mode sections ─────────────────────────────────────────────────────
+// Servers & tools. Each server heading carries its agent ("Gemini:postman-
+// mcp-server") so no separate per-agent section banner is needed, and each
+// tool name carries its server ("postman-mcp-server:createCollection") so
+// the table needs no separate Server column. Hairline borders, no fill —
+// keeps the grid without the byte cost of alternating row shading.
+const BOTTOM_LIMIT = PAGE_H - 20
+const LINE_H = 3.6
 
-// Servers: Name | Client | Transport | Risk | # Tools
-function buildSummaryServers(doc, servers) {
-    const startY = sectionHeading(doc, 'MCP Servers', 'Discovered servers and status')
-    const rows = servers.map(s => [
-        s.name,
-        s.description || '—',
-        s.securityRisk || (s.securityScanned ? '✓ clean' : '—'),
-        String(s.tools.length),
-    ])
+function buildServersAndTools(doc, servers, pageRef) {
+    doc.addPage()
+    pageRef['Servers & Tools'] = doc.internal.getCurrentPageInfo().pageNumber
+    let y = sectionHeading(doc, 'Servers & Tools', 'Tool names, descriptions, and connection details')
 
-    autoTable(doc, {
-        startY,
-        head: [['Server', 'Description', 'Risk', 'Tools']],
-        body: rows,
-        margin: { left: MARGIN, right: MARGIN },
-        styles: tableStyle(),
-        headStyles: headStyle(),
-        alternateRowStyles: { fillColor: [...C.tableRowAlt] },
-        columnStyles: {
-            0: { cellWidth: 44 },
-            1: { cellWidth: CONTENT - 100 },
-            2: { cellWidth: 28 },
-            3: { cellWidth: 18, halign: 'right' },
-        },
-        didParseCell(data) {
-            if (data.section === 'body' && data.column.index === 2) {
-                const risk = rows[data.row.index]?.[2]
-                if (risk && risk !== '—' && risk !== '✓ clean') {
-                    data.cell.styles.textColor = sevColor(risk)
-                    data.cell.styles.fontStyle = 'bold'
-                } else if (risk === '✓ clean') {
-                    data.cell.styles.textColor = [...C.accentLime]
-                }
-            }
-        },
-        theme: 'grid',
-    })
-}
+    const groups = groupServers(servers)
 
-// Tools: Server | Tool Name | Severity (no descriptions)
-function buildSummaryTools(doc, servers) {
-    const startY = sectionHeading(doc, 'Tools', 'All tools — name and security severity')
-    const rows = []
-    let prevServer = null
-
-    for (const s of servers) {
-        if (!s.tools.length) {
-            rows.push({ data: [s.name, '—', '—'], sev: null })
-            prevServer = s.name
-            continue
+    function ensureSpace(needed) {
+        if (y + needed > BOTTOM_LIMIT) {
+            doc.addPage()
+            y = MARGIN + 8
         }
-        for (const t of s.tools) {
-            const tf = (s.findings || []).filter(f => f.tool_name === t.name)
-            const sev = worstSev(tf)
-            rows.push({
-                data: [s.name !== prevServer ? s.name : '', t.name, sev || '—'],
-                sev,
+    }
+
+    for (const group of groups) {
+        for (const s of group.servers) {
+            ensureSpace(14)
+            setFont(doc, 10, 'bold', C.headingText)
+            doc.text(`${group.key}:${s.name}`, MARGIN, y)
+            y += 4.5
+
+            const metaText = [s.transport, s.package, serverCommandLine(s)]
+                .filter(Boolean)
+                .join('   ·   ')
+            if (metaText) {
+                setFont(doc, 7.5, 'normal', C.mutedText)
+                const lines = doc.splitTextToSize(metaText, CONTENT)
+                ensureSpace(lines.length * LINE_H + 2)
+                lines.forEach((line, i) => doc.text(line, MARGIN, y + i * LINE_H))
+                y += lines.length * LINE_H + 3
+            }
+
+            if (!s.tools.length) {
+                setFont(doc, 8, 'normal', C.mutedText)
+                doc.text('No tools discovered.', MARGIN, y)
+                y += 8
+                continue
+            }
+
+            ensureSpace(12)
+            autoTable(doc, {
+                startY: y,
+                body: s.tools.map(t => [`${s.name}:${t.name}`, t.description || '—']),
+                margin: { left: MARGIN, right: MARGIN },
+                styles: tableStyle({ lineWidth: 0.05 }),
+                columnStyles: { 0: { cellWidth: 62, fontStyle: 'bold' }, 1: { cellWidth: CONTENT - 62 } },
+                theme: 'grid',
             })
-            prevServer = s.name
+            y = doc.lastAutoTable.finalY + 8
         }
     }
-
-    autoTable(doc, {
-        startY,
-        head: [['Server', 'Tool', 'Severity']],
-        body: rows.map(r => r.data),
-        margin: { left: MARGIN, right: MARGIN },
-        styles: tableStyle(),
-        headStyles: headStyle(),
-        alternateRowStyles: { fillColor: [...C.tableRowAlt] },
-        columnStyles: {
-            0: { cellWidth: 52 },
-            1: { cellWidth: CONTENT - 84 },
-            2: { cellWidth: 24, halign: 'center' },
-        },
-        didParseCell(data) {
-            if (data.section === 'body' && data.column.index === 2) {
-                const sev = rows[data.row.index]?.sev
-                if (sev) {
-                    data.cell.styles.textColor = sevColor(sev)
-                    data.cell.styles.fontStyle = 'bold'
-                }
-            }
-        },
-        theme: 'grid',
-    })
 }
 
-// Security overview: Server | Risk Level | # Findings
-function buildSummarySecurityOverview(doc, servers) {
-    const startY = sectionHeading(doc, 'Security', 'Risk level per server')
-
-    const flagged = servers.filter(s => s.securityRisk)
-    if (!flagged.length) {
-        setFont(doc, 9, 'normal', C.mutedText)
-        doc.text('No security findings detected across all scanned servers.', MARGIN, startY + 6)
-        return
-    }
-
-    const rows = flagged.map(s => ({
-        data: [s.name, s.securityRisk || '—', String(s.findings.length)],
-        sev: s.securityRisk,
-    }))
-
-    autoTable(doc, {
-        startY,
-        head: [['Server', 'Risk Level', '# Findings']],
-        body: rows.map(r => r.data),
-        margin: { left: MARGIN, right: MARGIN },
-        styles: tableStyle(),
-        headStyles: headStyle(),
-        alternateRowStyles: { fillColor: [...C.tableRowAlt] },
-        columnStyles: {
-            0: { cellWidth: 80 },
-            1: { cellWidth: 60 },
-            2: { cellWidth: 40, halign: 'right' },
-        },
-        didParseCell(data) {
-            if (data.section === 'body' && data.column.index === 1) {
-                const sev = rows[data.row.index]?.sev
-                if (sev) {
-                    data.cell.styles.textColor = sevColor(sev)
-                    data.cell.styles.fontStyle = 'bold'
-                }
-            }
-        },
-        theme: 'grid',
-    })
-}
-
-// ── FULL mode sections ────────────────────────────────────────────────────────
-
-// Server | Tool | Description — with security finding sub-rows inline
-function buildFullTools(doc, servers) {
-    const startY = sectionHeading(doc, 'Servers & Tools', 'Tool descriptions and security findings')
-
-    const rows = []       // flat array of row data
-    const meta = []       // parallel array: { type, sev } per row
-
-    let prevServer = null
-    for (const s of servers) {
-        if (!s.tools.length) {
-            rows.push([s.name, '—', '—', '—'])
-            meta.push({ type: 'tool', sev: null })
-            prevServer = s.name
-            continue
-        }
-        for (const t of s.tools) {
-            const tf = (s.findings || []).filter(f => f.tool_name === t.name)
-            const sev = worstSev(tf)
-            rows.push([
-                s.name !== prevServer ? s.name : '',
-                t.name,
-                t.description || '—',
-                sev || '—',
-            ])
-            meta.push({ type: 'tool', sev })
-            prevServer = s.name
-
-            // Inline finding sub-rows
-            for (const f of tf) {
-                rows.push([
-                    '',
-                    '',
-                    `${(f.severity || '?').toUpperCase()} · ${f.analyzer || ''}: ${f.summary || ''}`,
-                    '',
-                ])
-                meta.push({ type: 'finding', sev: f.severity })
-            }
-        }
-    }
-
-    autoTable(doc, {
-        startY,
-        head: [['Server', 'Tool', 'Description', 'Risk']],
-        body: rows,
-        margin: { left: MARGIN, right: MARGIN },
-        styles: tableStyle({ overflow: 'linebreak' }),
-        headStyles: headStyle(),
-        alternateRowStyles: {},   // we handle row backgrounds manually
-        columnStyles: {
-            0: { cellWidth: 40 },
-            1: { cellWidth: 38 },
-            2: { cellWidth: CONTENT - 110 },
-            3: { cellWidth: 22, halign: 'center' },
-        },
-        didParseCell(data) {
-            if (data.section !== 'body') return
-            const ri = data.row.index
-            const m = meta[ri]
-            if (!m) return
-
-            if (m.type === 'finding') {
-                // finding sub-row: indented, lighter, severity-colored description
-                data.cell.styles.fontSize = 7
-                data.cell.styles.fillColor = [...C.findingRow]
-                data.cell.styles.cellPadding = { top: 1, bottom: 1, left: data.column.index === 2 ? 9 : 3, right: 3 }
-                if (data.column.index === 2) {
-                    data.cell.styles.textColor = sevColor(m.sev)
-                } else {
-                    data.cell.styles.textColor = [...C.mutedText]
-                }
-            } else {
-                // normal tool row — manual alternating (even/odd tool rows, ignoring finding rows)
-                const toolIdx = meta.slice(0, ri).filter(x => x.type === 'tool').length
-                data.cell.styles.fillColor = toolIdx % 2 === 0
-                    ? [...C.white]
-                    : [...C.tableRowAlt]
-                if (data.column.index === 3 && m.sev) {
-                    data.cell.styles.textColor = sevColor(m.sev)
-                    data.cell.styles.fontStyle = 'bold'
-                }
-            }
-        },
-        theme: 'grid',
-    })
-}
-
-// Full security findings section (existing detailed table)
-function buildFullSecurity(doc, servers) {
-    const startY = sectionHeading(doc, 'Security Findings', 'All issues detected by static analysis')
+// Security findings — server + only tools with findings + severity/analyzer/summary
+function buildSecuritySection(doc, servers) {
+    const startY = sectionHeading(doc, 'Security Findings', 'Servers and tools with detected issues')
 
     const flagged = servers.filter(s => s.findings.length > 0)
     if (!flagged.length) {
@@ -524,27 +355,23 @@ function buildFullSecurity(doc, servers) {
 
 // ── public interface ──────────────────────────────────────────────────────────
 export class PdfGenerator {
-    constructor({ mode = 'full' } = {}) {
-        this.mode = mode
-    }
-
-    generate(data) {
+    generate(data, options = {}) {
+        const { includeSecurity = false, scopeLabel = 'all' } = options
         const { meta, summary, agents, servers } = data
-        const isSummary = this.mode === 'summary'
-        const modeName  = isSummary ? 'Summary' : 'Full'
-        const dateStr   = fmtDateTime(meta.generatedAt)
+        const scopeTitle = scopeLabel === 'all' ? 'All Servers' : scopeLabel
+        const dateStr = fmtDateTime(meta.generatedAt)
 
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
         const pageRef = {}
 
         // Page 1 — cover
-        buildCover(doc, meta, modeName)
+        buildCover(doc, meta, scopeTitle)
 
         // Page 2 — TOC placeholder
         doc.addPage()
         const tocPage = doc.internal.getCurrentPageInfo().pageNumber
 
-        // Page 3 — Overview
+        // Overview
         doc.addPage()
         pageRef['Overview'] = doc.internal.getCurrentPageInfo().pageNumber
         buildOverview(doc, summary)
@@ -554,31 +381,14 @@ export class PdfGenerator {
         pageRef['AI Agents'] = doc.internal.getCurrentPageInfo().pageNumber
         buildAgents(doc, agents)
 
-        if (isSummary) {
-            // Servers
-            doc.addPage()
-            pageRef['MCP Servers'] = doc.internal.getCurrentPageInfo().pageNumber
-            buildSummaryServers(doc, servers)
+        // Servers & Tools (sectioned per agent when more than one is present)
+        buildServersAndTools(doc, servers, pageRef)
 
-            // Compact tools
-            doc.addPage()
-            pageRef['Tools'] = doc.internal.getCurrentPageInfo().pageNumber
-            buildSummaryTools(doc, servers)
-
-            // Security overview
-            doc.addPage()
-            pageRef['Security'] = doc.internal.getCurrentPageInfo().pageNumber
-            buildSummarySecurityOverview(doc, servers)
-        } else {
-            // Full tools + inline security
-            doc.addPage()
-            pageRef['Servers & Tools'] = doc.internal.getCurrentPageInfo().pageNumber
-            buildFullTools(doc, servers)
-
-            // Full security findings
+        // Security (optional)
+        if (includeSecurity) {
             doc.addPage()
             pageRef['Security Findings'] = doc.internal.getCurrentPageInfo().pageNumber
-            buildFullSecurity(doc, servers)
+            buildSecuritySection(doc, servers)
         }
 
         // Fill in TOC now that all page numbers are known
@@ -586,9 +396,8 @@ export class PdfGenerator {
         buildTOC(doc, pageRef)
 
         // Footers on every page except cover
-        addFooters(doc, dateStr, doc.internal.getNumberOfPages(), modeName)
+        addFooters(doc, dateStr, doc.internal.getNumberOfPages())
 
-        const suffix = isSummary ? 'summary' : 'full'
-        doc.save(`tooldex-report-${suffix}-${new Date().toISOString().slice(0, 10)}.pdf`)
+        doc.save(`tooldex-report-${scopeLabel}-${new Date().toISOString().slice(0, 10)}.pdf`)
     }
 }

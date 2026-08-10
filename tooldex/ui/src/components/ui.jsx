@@ -66,34 +66,6 @@ const PROVENANCE_COLOR_VARS = {
     red: { color: "var(--red)", bg: "var(--red-bg)", border: "var(--red-border)" },
 }
 
-export function ProvenanceTag({ server }) {
-    const { state, color, icon, iconMessage } = classifyServerProvenance(server)
-    const c = PROVENANCE_COLOR_VARS[color]
-    const symbol = icon === "warning" ? "⚠" : icon === "info" ? "ℹ" : null
-    return (
-        <span
-            title={iconMessage || undefined}
-            aria-label={iconMessage || undefined}
-            style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "2px 9px", borderRadius: 3,
-                background: c.bg, border: `1px solid ${c.border}`, color: c.color,
-                fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
-                fontFamily: "Menlo, Consolas, monospace",
-                cursor: iconMessage ? "help" : "default",
-            }}
-        >
-            {symbol && (
-                <span style={{
-                    fontSize: 12, lineHeight: 1, fontWeight: 700,
-                    letterSpacing: "0",
-                }}>{symbol}</span>
-            )}
-            <span>{state}</span>
-        </span>
-    )
-}
-
 export function ProvenanceDot({ server }) {
     const { color } = classifyServerProvenance(server)
     const c = PROVENANCE_COLOR_VARS[color]
@@ -104,32 +76,6 @@ export function ProvenanceDot({ server }) {
         }} />
     )
 }
-
-export function ProvenanceIcon({ server }) {
-    const { icon, iconMessage } = classifyServerProvenance(server)
-    if (!icon) return null
-    const symbol = icon === "warning" ? "⚠" : "ℹ"
-    const isWarning = icon === "warning"
-    const fg = isWarning ? "var(--yellow-muted)" : "var(--cream-dim)"
-    const bg = isWarning ? "var(--orange-bg)" : "var(--surface3)"
-    const border = isWarning ? "var(--orange-border)" : "var(--border2)"
-    return (
-        <span
-            title={iconMessage}
-            aria-label={iconMessage}
-            style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 22, height: 22, borderRadius: "50%",
-                fontSize: 13, fontWeight: 700,
-                color: fg, background: bg, border: `1px solid ${border}`,
-                cursor: "help", marginLeft: 10,
-                fontFamily: "Menlo, Consolas, monospace",
-                lineHeight: 1, flexShrink: 0,
-            }}
-        >{symbol}</span>
-    )
-}
-
 
 export function Tag({ children, color }) {
     return (

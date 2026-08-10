@@ -8,13 +8,9 @@ from __future__ import annotations
 
 import json5
 import logging
+import tomllib
 from pathlib import Path
 from typing import Optional
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
 
 from tooldex.core.discovery._parsers import parse_claude_json, parse_mcp_servers
 from tooldex.core.discovery._paths import claude_code_user_path
@@ -23,27 +19,21 @@ from tooldex.core.discovery.results import DiscoverySource, SourceStatus
 logger = logging.getLogger("tooldex.discovery.readers")
 
 
-def read_json(
-    client: str,
-    path: Optional[Path],
-    env: Optional[dict[str, str]] = None,
-) -> Optional[DiscoverySource]:
+def _load_json5(client: str, path: Path) -> tuple[Optional[dict], list[str], Optional[DiscoverySource]]:
     """
-    Read one JSON MCP config and return a DiscoverySource.
-    Returns None when path is None (resolver found nothing applicable).
+    Read and JSON5-parse `path`, tracking duplicate top-level keys.
+    Returns (raw, duplicate_keys, None) on success, or (None, [], early_result)
+    when the caller should return early_result as-is (missing/unreadable/invalid).
     """
-    if path is None:
-        return None
-
     path_str = str(path)
 
     if not path.exists():
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.NOT_FOUND)
+        return None, [], DiscoverySource(client=client, path=path_str, status=SourceStatus.NOT_FOUND)
 
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
+        return None, [], DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
 
     duplicate_keys: list[str] = []
 
@@ -61,10 +51,33 @@ def read_json(
     try:
         raw = json5.loads(text, object_pairs_hook=_pairs_hook)
     except ValueError as exc:
-        return DiscoverySource(
+        return None, [], DiscoverySource(
             client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
             error=f"Invalid JSON: {exc}",
         )
+
+    return raw, duplicate_keys, None
+
+
+def read_json(
+    client: str,
+    path: Optional[Path],
+    env: Optional[dict[str, str]] = None,
+    key: str = "mcpServers",
+) -> Optional[DiscoverySource]:
+    """
+    Read one JSON MCP config and return a DiscoverySource.
+    Returns None when path is None (resolver found nothing applicable).
+    `key` lets callers handle configs that nest servers under a different
+    top-level name (e.g. VSCode uses "servers" instead of "mcpServers").
+    """
+    if path is None:
+        return None
+
+    path_str = str(path)
+    raw, duplicate_keys, early = _load_json5(client, path)
+    if early is not None:
+        return early
 
     if not isinstance(raw, dict):
         return DiscoverySource(
@@ -72,19 +85,19 @@ def read_json(
             error=f"Top-level JSON must be an object, got {type(raw).__name__}",
         )
 
-    if "mcpServers" not in raw:
+    if key not in raw:
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.EMPTY,
-            error='No "mcpServers" key — not an MCP config file',
+            error=f'No "{key}" key — not an MCP config file',
         )
 
-    if not isinstance(raw["mcpServers"], dict):
+    if not isinstance(raw[key], dict):
         return DiscoverySource(
             client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-            error=f'"mcpServers" must be an object, got {type(raw["mcpServers"]).__name__}',
+            error=f'"{key}" must be an object, got {type(raw[key]).__name__}',
         )
 
-    servers = parse_mcp_servers(raw, path_str, env=env)
+    servers = parse_mcp_servers(raw, path_str, env=env, key=key)
     status = SourceStatus.FOUND if servers else SourceStatus.EMPTY
     return DiscoverySource(
         client=client, path=path_str, status=status, servers=servers,
@@ -104,34 +117,9 @@ def read_claude_json(
     path_str = str(path)
     client = "claude_code_user"
 
-    if not path.exists():
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.NOT_FOUND)
-
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        return DiscoverySource(client=client, path=path_str, status=SourceStatus.READ_ERROR, error=str(exc))
-
-    duplicate_keys: list[str] = []
-
-    def _pairs_hook(pairs: list) -> dict:
-        seen: set[str] = set()
-        out: dict = {}
-        for k, v in pairs:
-            if k in seen:
-                duplicate_keys.append(k)
-            else:
-                seen.add(k)
-            out[k] = v
-        return out
-
-    try:
-        raw = json5.loads(text, object_pairs_hook=_pairs_hook)
-    except ValueError as exc:
-        return DiscoverySource(
-            client=client, path=path_str, status=SourceStatus.PARSE_ERROR,
-            error=f"Invalid JSON: {exc}",
-        )
+    raw, duplicate_keys, early = _load_json5(client, path)
+    if early is not None:
+        return early
 
     if not isinstance(raw, dict):
         return DiscoverySource(

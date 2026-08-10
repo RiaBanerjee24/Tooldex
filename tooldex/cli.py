@@ -5,134 +5,23 @@ Tooldex CLI — `run` autodiscovers MCP servers and starts the UI.
 import json as _json
 import logging
 import os
-import socket
 import sys
-import threading
-import time
 import uvicorn
 import typer
 from typing import Optional
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Port resolution
-# ---------------------------------------------------------------------------
-
-_PORT_DEFAULT = 8282
-_PORT_HARD_LIMIT = 49150
-
-_SKIP_PORTS: frozenset[int] = frozenset({
-    *range(0, 1024),
-    3000, 3001,
-    3306,
-    4200,
-    5000, 5001,
-    5173,
-    5432,
-    6379,
-    8000, 8001,
-    8080, 8081,
-    8443,
-    8888,
-    9000,
-    9090,
-    9092,
-    9200,
-    27017,
-})
-
-
-def _find_free_port(start: int, host: str) -> int:
-    port = start
-    while port <= _PORT_HARD_LIMIT:
-        if port not in _SKIP_PORTS:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                try:
-                    s.bind((host, port))
-                    return port
-                except OSError:
-                    pass
-        port += 1
-    typer.echo(f"\n  Error: No free port found between {start} and {_PORT_HARD_LIMIT}.\n", err=True)
-    raise typer.Exit(1)
-
-
 from tooldex import __version__
+from tooldex._ports import PORT_DEFAULT, find_free_port
+from tooldex._spinner import Spinner
+from tooldex.preferences import load_prefs, save_pref
 from tooldex.core.discovery import detect_all, list_tools_for_all
 from tooldex.core.discovery.to_manifest import build_manifest
 from tooldex.core.parsers.parser import init_parser_from_manifest, store_discovery_sources
 from tooldex.api.app import create_app
-from tooldex._cli_output import print_summary, result_as_json
+from tooldex._cli_output import print_banner, print_summary, result_as_json
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
-
-# ---------------------------------------------------------------------------
-# Preferences store  (~/.tooldex/preferences.json)
-# ---------------------------------------------------------------------------
-
-def _prefs_path() -> Path:
-    return Path.home() / ".tooldex" / "preferences.json"
-
-def _load_prefs() -> dict:
-    p = _prefs_path()
-    if not p.exists():
-        return {}
-    try:
-        return _json.loads(p.read_text())
-    except Exception:
-        return {}
-
-def _save_pref(key: str, value) -> None:
-    p = _prefs_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    prefs = _load_prefs()
-    prefs[key] = value
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(_json.dumps(prefs, indent=2))
-    tmp.replace(p)  # atomic rename on POSIX
-
-
-# ---------------------------------------------------------------------------
-# Discovery spinner  ("tooldexing  3s")
-# ---------------------------------------------------------------------------
-
-class _Spinner:
-    def __init__(self):
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._tick, daemon=True)
-        self._started = False
-
-    def _tick(self):
-        try:
-            tty = open("/dev/tty", "w")
-        except OSError:
-            return
-        start = time.monotonic()
-        try:
-            while not self._stop.is_set():
-                s = int(time.monotonic() - start)
-                tty.write(f"\r  tooldexing  {s}s ")
-                tty.flush()
-                time.sleep(0.25)
-        finally:
-            tty.close()
-
-    def start(self):
-        self._thread.start()
-        self._started = True
-
-    def stop(self):
-        self._stop.set()
-        if self._started:
-            self._thread.join()
-        try:
-            with open("/dev/tty", "w") as tty:
-                tty.write("\r" + " " * 30 + "\r")
-                tty.flush()
-        except OSError:
-            pass
-
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -166,7 +55,7 @@ def callback(
 @cli.command(context_settings={"help_option_names": ["-h", "--help"]})
 def run(
     port: int = typer.Option(
-        _PORT_DEFAULT, "--port", "-p", "-port",
+        PORT_DEFAULT, "--port", "-p", "-port",
         help="Starting port. Tooldex increments automatically if the port is occupied (hard limit 49150).",
     ),
     host: str = typer.Option(
@@ -208,23 +97,24 @@ def run(
         False, "--no-cache",
         help="Bypass the probe cache and re-probe every server live.",
     ),
+    no_security_scan: bool = typer.Option(
+        False, "--no-security-scan", "-no-security-scan",
+        help=(
+            "Skip the automatic YARA security scan (connects to every server a second "
+            "time; this disables that second connection entirely). Equivalent to "
+            "TOOLDEX_SECURITY_SCAN=false, and also applies to later 'rescan all' calls "
+            "for the life of this server."
+        ),
+    ),
 ):
-    """
-    Autodiscover MCP servers and start the Tooldex UI.
-
-    Scans known MCP-client config files (Claude Code, Cursor, Codex, MCP JSON),
-    probes each discovered server for its tool surface, and starts the Tooldex UI.
-
-    \b
-    Options support both -- and - prefix  (e.g. --json or -json).
-    Use --no-probe <name> to skip probing specific servers by name.
-    Use --config <file> to include additional MCP config files.
-    """
+    """Autodiscover MCP servers and start the Tooldex UI. Options accept both -- and - prefix."""
     if as_json:
         no_serve = True
+    if no_security_scan:
+        os.environ["TOOLDEX_SECURITY_SCAN"] = "false"
 
     # ── permissions: agent CLI status commands ───────────────────────────────
-    prefs = _load_prefs()
+    prefs = load_prefs()
     interactive = sys.stdin.isatty() and not as_json
 
     def _ask_permission(cli_cmd: str, pref_key: str) -> bool:
@@ -244,7 +134,7 @@ def run(
                 return True
             if choice == "2":
                 typer.echo("")
-                _save_pref(pref_key, True)
+                save_pref(pref_key, True)
                 return True
             if choice == "3":
                 typer.echo("")
@@ -275,7 +165,7 @@ def run(
     os.dup2(_devnull, 2)
     os.close(_devnull)
 
-    spinner = _Spinner()
+    spinner = Spinner()
     if _is_tty:
         spinner.start()
 
@@ -319,14 +209,19 @@ def run(
         os.write(1, (payload + "\n").encode())
         raise typer.Exit(0)
 
-    from tooldex.scanner import scan_servers
-    probed_ids = {r.server_id for r in tool_results if r.ok}
-    servers_to_scan = {
-        sid: srv
-        for sid, srv in config_result.servers.items()
-        if sid in probed_ids
-    }
-    scan_results = scan_servers(servers_to_scan)
+    from tooldex.scanner import scan_servers, security_scan_enabled
+    if security_scan_enabled():
+        probed_ids = {r.server_id for r in tool_results if r.ok}
+        servers_to_scan = {
+            sid: srv
+            for sid, srv in config_result.servers.items()
+            if sid in probed_ids
+        }
+        scan_results = scan_servers(servers_to_scan)
+    else:
+        reason = "--no-security-scan flag was passed" if no_security_scan else "TOOLDEX_SECURITY_SCAN is set to false"
+        typer.secho(f"\n  Security scan skipped — {reason}.", fg="yellow")
+        scan_results = {}
 
     print_summary(config_result, tool_results)
 
@@ -342,17 +237,18 @@ def run(
         raise typer.Exit(0)
 
     # ── start server ─────────────────────────────────────────────────────────
-    actual_port = _find_free_port(port, host)
+    actual_port = find_free_port(port, host)
     if actual_port != port:
         typer.echo(f"\n  Port {port} in use — using {actual_port} instead.")
 
     store_discovery_sources(config_result.sources)
     manifest = build_manifest(config_result, tool_results, scan_results)
+    from tooldex.scanner import hydrate_llm_cache
+    hydrate_llm_cache(manifest)
     init_parser_from_manifest(manifest)
 
     total_tools = sum(len(s.discovered_tools) for s in manifest.servers.values())
     url = f"http://{host}:{actual_port}"
-    from tooldex._cli_output import print_banner
     print_banner(len(manifest.servers), total_tools, url)
 
     uvicorn.run(create_app(), host=host, port=actual_port, log_level="warning")

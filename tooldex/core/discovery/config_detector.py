@@ -2,15 +2,6 @@
 tooldex/core/discovery/config_detector.py
 
 Orchestrates MCP config-file autodiscovery.
-
-Delegates to:
-  _readers.py        — file I/O (JSON / TOML config readers)
-  _parsers.py        — env resolution and mcpServers shape parsing
-  _paths.py          — platform-aware path resolution
-  _status_claude.py  — live status via `claude mcp list`
-  _status_cursor.py  — live status via `cursor-agent mcp list-tools`
-  _status_codex.py   — live status via `codex mcp list`
-  _docker_mcp.py     — Docker MCP Toolkit profile reader
 """
 from __future__ import annotations
 
@@ -22,6 +13,7 @@ from typing import Optional
 from tooldex.core.discovery._readers import read_json, read_claude_json, read_codex_toml
 from tooldex.core.discovery._paths import (
     CLIENT_PRIORITY,
+    CLIENT_SERVERS_KEY,
     build_plan,
     codex_project_path,
     codex_user_path,
@@ -102,7 +94,7 @@ def detect_all(
             logger.warning("Path resolution failed for %s: %s", client, exc)
             continue
 
-        source = read_json(client, path, env=env)
+        source = read_json(client, path, env=env, key=CLIENT_SERVERS_KEY.get(client, "mcpServers"))
         if source is None:
             continue
         result.sources.append(source)

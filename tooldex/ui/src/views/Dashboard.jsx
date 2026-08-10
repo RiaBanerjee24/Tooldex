@@ -6,7 +6,7 @@ function RescanButton({ onRescan, rescanState, rescanSeconds }) {
     const borderColor = rescanState === "scanning" ? "var(--yellow-muted)" : "var(--border2)"
 
     return (
-        <button onClick={onRescan} style={{
+        <button onClick={() => onRescan()} style={{
             padding: "6px 14px", background: "var(--surface2)",
             border: `1px solid ${borderColor}`,
             borderRadius: "var(--radius)", cursor: rescanState === "scanning" ? "default" : "pointer",
@@ -61,7 +61,7 @@ export function Dashboard({ health, serversData, onNavigateServers, onNavigateTo
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginBottom: 28 }}>
                 <StatCard label="MCP Servers" value={serversData.total} sub="configured" onClick={onNavigateServers} />
-                <StatCard label="Tools Tracked" value={discoveredTools} sub="via MCP servers" />
+                <StatCard label="Tools Tracked" value={discoveredTools} sub="via MCP servers" onClick={onNavigateServers} />
             </div>
 
             {health.warnings?.length > 0 && (

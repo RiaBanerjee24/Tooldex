@@ -14,7 +14,10 @@ async function get(path) {
 
 async function post(path) {
     const res = await fetch(`${BASE}${path}`, { method: "POST" })
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${path}`)
+    if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || body?.detail?.error || `${res.status} ${res.statusText} — ${path}`)
+    }
     return res.json()
 }
 
@@ -23,10 +26,14 @@ export const api = {
     agents: () => get("/api/agents"),
     agent: (id) => get(`/api/agents/${id}`),
     servers: () => get("/api/servers"),
-    server: (id) => get(`/api/servers/${id}`),
+    server: (id) => get(`/api/servers/${encodeURIComponent(id)}`),
     matrix: () => get("/api/policy/matrix"),
     engines: () => get("/api/policy/engines"),
     engineRaw: (id) => get(`/api/policy/engines/${id}/raw`),
     rescan: () => post("/api/rescan"),
-    rescanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/rescan`),
+    rescanServer: (id, force = false) => post(`/api/servers/${encodeURIComponent(id)}/rescan${force ? "?force=true" : ""}`),
+    llmScanServer: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan`),
+    llmScanStatus: (id) => get(`/api/servers/${encodeURIComponent(id)}/llm-scan/status`),
+    llmScanStop: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/stop`),
+    llmInvalidateCache: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/invalidate-cache`),
 }

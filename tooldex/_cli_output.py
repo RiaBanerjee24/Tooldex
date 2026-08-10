@@ -43,28 +43,9 @@ _CLIENT_DISPLAY = {
 }
 
 
-_RISK_STYLE = {
-    "CRITICAL": {"fg": "red",    "bold": True},
-    "HIGH":     {"fg": "red",    "bold": False},
-    "MEDIUM":   {"fg": "yellow", "bold": False},
-    "LOW":      {"fg": "cyan",   "bold": False},
-    "INFO":     {"fg": "white",  "bold": False},
-    "CLEAN":    {"fg": "green",  "bold": False},
-}
-
-_SEVERITY_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
-
-
-def _worst_severity(severities: list[str]) -> str:
-    if not severities:
-        return "LOW"
-    return min(severities, key=lambda s: _SEVERITY_RANK.get(s.upper(), 99))
-
-
 def print_summary(
     config_result: ConfigDetectionResult,
     tool_results: list[ToolDiscoveryResult],
-    scan_results: dict | None = None,
 ) -> None:
     """Pretty-print discovery to stdout."""
     typer.echo("")
@@ -105,48 +86,6 @@ def print_summary(
                 )
                 if result.error:
                     typer.echo(f"     └─ {typer.style(result.error, fg='red', dim=True)}")
-
-    if scan_results:
-        typer.echo("")
-        typer.echo(typer.style("Security", bold=True))
-
-        flagged_servers = {
-            sid: [t for t in tools if not t.is_safe]
-            for sid, tools in scan_results.items()
-            if any(not t.is_safe for t in tools)
-        }
-        clean_count = len(scan_results) - len(flagged_servers)
-
-        if not flagged_servers:
-            typer.echo(
-                f"  {typer.style('✓', fg='green')}  "
-                f"All {len(scan_results)} scanned servers clean"
-            )
-        else:
-            if clean_count:
-                typer.echo(
-                    f"  {typer.style('✓', fg='green')}  "
-                    f"{clean_count} server{'s' if clean_count != 1 else ''} clean"
-                )
-            for server_id, flagged_tools in flagged_servers.items():
-                severities = [f.severity for t in flagged_tools for f in t.findings]
-                worst = _worst_severity(severities)
-                style = _RISK_STYLE.get(worst, {"fg": "yellow", "bold": False})
-                typer.echo(
-                    f"  {typer.style('⚠', fg=style['fg'], bold=style['bold'])}  "
-                    f"{server_id:<38} "
-                    f"{typer.style(worst, **style)}"
-                )
-                for tool_result in flagged_tools:
-                    for finding in tool_result.findings:
-                        f_style = _RISK_STYLE.get(finding.severity, {"fg": "yellow", "bold": False})
-                        typer.echo(
-                            f"     └─ {typer.style(finding.severity, **f_style)}"
-                            f"  [{finding.analyzer}]  {finding.threat_category}"
-                        )
-                        typer.echo(
-                            f"        {typer.style(finding.summary, dim=True)}"
-                        )
 
     checked = config_result.checked
     servers = len(config_result.servers)

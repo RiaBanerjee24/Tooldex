@@ -12,28 +12,6 @@ Global (user-level) configs live in the home directory and apply machine-wide.
 Project-level configs live somewhere inside a project tree (below home).
 walk_up_for() stops at the home directory so a project walk-up can never
 accidentally return a global config file.
-
-Supported locations:
-
-    Claude Code         ~/.claude.json              (global)
-                        <project>/.claude/mcp.json  (project, walk up, stops at ~)
-                        <project>/.claude.json       (project, flat-file alternative)
-
-    Cursor              ~/.cursor/mcp.json          (global)
-                        <project>/.cursor/mcp.json  (project, walk up, stops at ~)
-
-    Codex CLI           ~/.codex/config.toml        (global)
-                        <project>/.codex/config.toml (project, walk up, stops at ~)
-
-    MCP JSON            ~/.mcp.json                 (global, team/shared definitions)
-                        <project>/.mcp.json          (project, walk up, stops at ~)
-                        <project>/mcp.json           (bare, project, walk up, stops at ~)
-
-    Agents              ~/.agents/mcp.json          (global)
-                        <project>/.agents/mcp.json   (project, walk up, stops at ~)
-
-    Antigravity IDE     ~/.gemini/antigravity/mcp_config.json   (global)
-                        <project>/.gemini/antigravity/mcp_config.json  (project, walk up, stops at ~)
 """
 from __future__ import annotations
 
@@ -50,6 +28,10 @@ CLIENT_PRIORITY = (
     "cursor_user",
     "codex_project",
     "codex",
+    "vscode_project",
+    "vscode_project_dotfile",
+    "vscode_user",
+    "copilot_cli_user",
     "mcp_json_project",
     "mcp_json_user",
     "mcp_json_bare_project",
@@ -59,6 +41,15 @@ CLIENT_PRIORITY = (
     "agents_user_dotfile",
     "antigravity_user",
 )
+
+# Clients whose JSON config nests servers under a key other than "mcpServers".
+# Copilot CLI's mcp-config.json uses the standard "mcpServers" key, so it's
+# intentionally absent here.
+CLIENT_SERVERS_KEY = {
+    "vscode_project": "servers",
+    "vscode_project_dotfile": "servers",
+    "vscode_user": "servers",
+}
 
 
 def walk_up_for(start: Path, parts: tuple[str, ...]) -> Optional[Path]:
@@ -107,6 +98,29 @@ def codex_project_path(cwd: Path) -> Optional[Path]:
     return walk_up_for(cwd, (".codex", "config.toml"))
 
 
+def vscode_project_path(cwd: Path) -> Optional[Path]:
+    return walk_up_for(cwd, (".vscode", "mcp.json"))
+
+
+def vscode_project_dotfile_path(cwd: Path) -> Optional[Path]:
+    return walk_up_for(cwd, (".vscode", ".mcp.json"))
+
+
+def vscode_user_path() -> Path:
+    """
+    VSCode's global (user-scoped) MCP config — pairs with the workspace-scoped
+    vscode_project*_path() resolvers above. Same directory GitHub Copilot's
+    chat UI reads from, but this is VSCode's own native MCP config file,
+    not Copilot-specific.
+    """
+    return Path.home() / ".config" / "Code" / "User" / "mcp.json"
+
+
+def copilot_cli_user_path() -> Path:
+    """GitHub Copilot CLI's global MCP config."""
+    return Path.home() / ".copilot" / "mcp-config.json"
+
+
 def mcp_json_user_path() -> Path:
     return Path.home() / ".mcp.json"
 
@@ -149,6 +163,10 @@ def build_plan(cwd: Path) -> list[tuple[str, Callable[[], Optional[Path]]]]:
         ("claude_code_project",    lambda: claude_code_project_path(cwd)),
         ("cursor_project",         lambda: cursor_project_path(cwd)),
         ("cursor_user",            cursor_user_path),
+        ("vscode_project",         lambda: vscode_project_path(cwd)),
+        ("vscode_project_dotfile", lambda: vscode_project_dotfile_path(cwd)),
+        ("vscode_user",            vscode_user_path),
+        ("copilot_cli_user",       copilot_cli_user_path),
         ("mcp_json_project",       lambda: mcp_json_project_path(cwd)),
         ("mcp_json_user",          mcp_json_user_path),
         ("mcp_json_bare_project",  lambda: mcp_json_bare_project_path(cwd)),

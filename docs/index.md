@@ -1,13 +1,13 @@
 # Tooldex
 
-Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, Gemini (Antigravity), Agents, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
+Tooldex autodiscovers MCP servers configured across your AI clients — Claude Code, Cursor, Codex, VSCode, Copilot, Gemini (Antigravity), Agents, Docker MCP Toolkit — and surfaces them in a unified UI. No manual config. Run it from any project directory and it finds everything.
 
 ---
 
 ## Requirements
 
 - Python 3.10 or later
-- At least one supported MCP client configured (Claude Code, Cursor, Codex, Gemini, or Docker MCP Toolkit)
+- At least one supported MCP client configured (Claude Code, Cursor, Codex, VSCode, Copilot, Gemini, or Docker MCP Toolkit)
 
 ---
 
@@ -36,7 +36,7 @@ Tooldex scans config files, probes each discovered server for its tool surface, 
 
 ```
   ╔══════════════════════════════════════════════════╗
-  ║         tooldex  v0.1.1                         ║
+  ║         tooldex  v1.0.1                         ║
   ╠══════════════════════════════════════════════════╣
   ║  Servers  12                                     ║
   ║  Tools    187                                    ║
@@ -92,6 +92,24 @@ Tooldex checks all of the following on every run. Files that do not exist are sk
 |---|---|
 | Global | `~/.codex/config.toml` |
 | Project | `<project>/.codex/config.toml` |
+
+### VSCode
+
+| Scope | Path |
+|---|---|
+| Workspace | `<project>/.vscode/mcp.json` |
+| Workspace | `<project>/.vscode/.mcp.json` |
+| User (global) | `~/.config/Code/User/mcp.json` |
+
+VSCode nests servers under a top-level `"servers"` key rather than `"mcpServers"` — Tooldex parses that shape natively. `${input:...}` placeholders are left untouched; standard `${VAR}` / `$VAR` env references still resolve normally. All three paths are scanned independently — if more than one exists, servers from each are merged in.
+
+### Copilot CLI
+
+| Scope | Path |
+|---|---|
+| Global | `~/.copilot/mcp-config.json` |
+
+GitHub Copilot CLI's own config — separate from VSCode's Copilot chat extension above. Unlike VSCode, it uses the standard `"mcpServers"` key, with a `"type": "local"` transport field and an optional `"tools"` allowlist array Tooldex doesn't currently filter on.
 
 ### MCP JSON (shared / team configs)
 
@@ -221,6 +239,8 @@ tooldex [OPTIONS] COMMAND [ARGS]
 | `--concurrency` | `8` | Maximum concurrent server probes. |
 | `--no-probe <name>` | — | Skip probing a specific server by name. Repeatable. |
 | `--config <path>` | — | Additional MCP config file to include. Repeatable. |
+| `--no-cache` | off | Bypass the probe cache and re-probe every server live. |
+| `--no-security-scan` | off | Skip the automatic YARA security scan (see [Security Scanning](#security-scanning)). Equivalent to `TOOLDEX_SECURITY_SCAN=false`, and also applies to later "rescan all" calls for the life of this server. |
 
 #### Examples
 
@@ -239,6 +259,9 @@ tooldex run --no-probe node-api-docs --no-probe local-mcp
 
 # Pipe the discovery result into jq
 tooldex run --json | jq '.duplicates'
+
+# Skip the automatic YARA security scan entirely
+tooldex run --no-security-scan
 ```
 
 ---
@@ -274,6 +297,62 @@ tooldex run --json | jq '.duplicates'
 
 ---
 
+## Security Scanning
+
+Powered by [Cisco's MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner) (`mcpscanner` on PyPI) — Tooldex wraps it, it doesn't reimplement it.
+
+### YARA scan (always on)
+
+Runs automatically as part of every discovery and rescan, for every server. Local, free, no API key required, no configuration needed.
+
+**Every server is connected to twice per discovery/rescan** — once by Tooldex's own discovery probe (`tools/list`, for the UI), and once independently by mcpscanner's `Scanner` (to fetch tool metadata for YARA analysis). These are two separate connections/process launches; mcpscanner doesn't expose a way to reuse tools Tooldex has already fetched.
+
+| Env var | Description | Default |
+|---|---|---|
+| `TOOLDEX_SECURITY_SCAN` | Set to `false` to disable the automatic YARA scan entirely (startup and later "rescan all" calls). Same as `--no-security-scan`. | `true` |
+| `MCP_SCANNER_CONCURRENCY` | Maximum concurrent YARA scan calls. Distinct from `run`'s `--concurrency` flag, which controls tool-*probing* concurrency, not scanning. | `8` |
+
+`--no-security-scan` and `TOOLDEX_SECURITY_SCAN=false` are equivalent (the flag sets that env var for the process). Whenever the scan is skipped, Tooldex prints the reason:
+
+```
+Security scan skipped — --no-security-scan flag was passed.
+Security scan skipped — TOOLDEX_SECURITY_SCAN is set to false.
+```
+
+### AI security scan (LLM-as-judge, opt-in)
+
+Tooldex's AI security scan is powered by Cisco AI Defense's open-source mcpscanner SDK, running entirely locally — the only network call it makes is to whichever LLM provider you configure.
+
+An LLM reviews each tool's name, description, and input schema for malicious intent (data exfiltration, prompt injection, tool poisoning, etc.). Unlike YARA, this never runs automatically — it's triggered manually per server, from the UI ("AI security scan" button) or via `POST /api/servers/{id}/llm-scan/`.
+
+Requires `TOOLDEX_LLM_API_KEY` at minimum. Without it, the AI security scan is simply unavailable — YARA scanning is unaffected.
+
+| Env var | Legacy fallback | Description | Default |
+|---|---|---|---|
+| `TOOLDEX_LLM_API_KEY` | `MCP_SCANNER_LLM_API_KEY` | API key for your LLM provider (OpenAI, Anthropic, etc). Required to enable the AI security scan. | *(unset — scan disabled)* |
+| `TOOLDEX_LLM_MODEL` | `MCP_SCANNER_LLM_MODEL` | Model to use, e.g. `gpt-4o`, `claude-3-5-sonnet-latest` | `gpt-4o` |
+| `TOOLDEX_LLM_RATE_LIMIT_DELAY` | `MCP_SCANNER_LLM_RATE_LIMIT_DELAY` | Seconds to wait between LLM calls | `2.0` |
+| `TOOLDEX_LLM_TEMPERATURE` | `MCP_SCANNER_LLM_TEMPERATURE` | Sampling temperature | `1.0` |
+| `TOOLDEX_LLM_MAX_RETRIES` | `MCP_SCANNER_LLM_MAX_RETRIES` | Max retries on a failed LLM call | `6` |
+| `TOOLDEX_LLM_BASE_URL` | `MCP_SCANNER_LLM_BASE_URL` | Custom endpoint (Azure OpenAI, self-hosted Ollama/vLLM/LocalAI, etc.) | *(unset)* |
+| `TOOLDEX_LLM_API_VERSION` | `MCP_SCANNER_LLM_API_VERSION` | API version, e.g. required by Azure OpenAI | *(unset)* |
+| `TOOLDEX_LLM_TIMEOUT` | `MCP_SCANNER_LLM_TIMEOUT` | Per-request LLM timeout in seconds | `30` |
+
+Every `TOOLDEX_LLM_*` var also accepts its original mcpscanner name (`MCP_SCANNER_LLM_*`) as a fallback if the `TOOLDEX_LLM_*` one isn't set — an existing mcpscanner-native setup keeps working un-migrated. Using a legacy name prints a one-time notice on the CLI pointing at the rename.
+
+`MCP_SCANNER_API_KEY` (Cisco's separate cloud API) and `VIRUSTOTAL_API_KEY` are **not** supported — Tooldex only uses mcpscanner's local YARA and LLM analyzers.
+
+**Model support:** any [LiteLLM](https://docs.litellm.ai/)-compatible model string works, since the LLM analyzer runs through LiteLLM internally — there's no fixed allowlist. `TOOLDEX_LLM_MODEL` defaults to `gpt-4o` if unset.
+
+**Caching:** results are cached per-server, per-tool at `~/.tooldex/llm_scan_cache.json`, fingerprinted by a hash of each tool's name, description, and input schema — a cache entry is invalidated automatically the moment that tool's identity changes, with no TTL otherwise.
+
+- Clicking "AI security scan" (or its rerun icon) always forces a fresh LLM call per tool, bypassing any cache hit — but still writes the result back to the cache.
+- On `tooldex run` startup, and on every page load, the last cached verdict for each server is shown immediately with zero LLM calls made.
+- The clear-cache (trash) icon removes all cached entries for a server and resets its displayed state back to "not yet scanned."
+- Rescanning a server (or "Rescan All") while an AI security scan is in flight on it is blocked with `409 llm_scan_running` unless forced, in which case the running scan is aborted first.
+
+---
+
 ## API Endpoints
 
 When the server is running (default `http://127.0.0.1:8282`). All endpoints respond with or without a trailing slash.
@@ -281,11 +360,29 @@ When the server is running (default `http://127.0.0.1:8282`). All endpoints resp
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/health/` | `status`, current `timestamp`, and `uptime_seconds` since the server started |
-| `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file` |
+| `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file`, `has_llm_cache`, and the `security_*` fields below |
 | `GET` | `/api/servers/{id}/` | Single server with full tool detail |
-| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server and update its tools in place |
+| `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server, update its tools in place, and (if the probe succeeds and `TOOLDEX_SECURITY_SCAN` isn't disabled) re-run its YARA scan too. `force=true` aborts an in-flight AI security scan on this server first; otherwise returns `409 {"error": "llm_scan_running"}` while one is running |
+| `POST` | `/api/servers/{id}/llm-scan/` | Start the AI security scan for one server as a background job. `force` (default `true`) skips the cache and forces fresh LLM calls; results are cached either way |
+| `GET` | `/api/servers/{id}/llm-scan/status/` | Poll progress (`scanned`/`total`) and outcome of the AI security scan job for this server |
+| `POST` | `/api/servers/{id}/llm-scan/stop/` | Signal a running AI security scan to stop |
+| `POST` | `/api/servers/{id}/llm-scan/invalidate-cache/` | Clear cached AI scan results for this server and reset its displayed state to "not yet scanned" |
 | `GET` | `/api/files/` | All config files that were scanned: path, client, status, server IDs found, any parse errors |
 | `POST` | `/api/rescan/` | Full rediscovery — re-reads all configs and re-probes every server. Returns `{"status": "already_scanning"}` if a rescan is already running. |
+| `GET` | `/api/rescan/stream/` | Same rediscovery as above, streamed as Server-Sent Events (one per server, then `done`). `force=true` aborts any in-flight AI security scans fleet-wide first; otherwise yields `{"type": "blocked", "servers": [...]}` and stops |
+
+**Per-server security fields** (on `/api/servers/` and `/api/servers/{id}/`):
+
+| Field | Description |
+|---|---|
+| `security_findings` | List of findings from the last scan: `{tool_name, severity, analyzer, threat_category, summary}` |
+| `security_risk` | Worst severity across all findings — `HIGH` / `MEDIUM` / `LOW` / `INFO` / `null` |
+| `security_scanned` | `true` once this server has been included in a scan run |
+| `security_llm_scanned_at` | UTC ISO timestamp of the last AI security scan, if any |
+| `security_llm_new_findings` | Findings from the last AI scan not present in the one before it |
+| `security_llm_cache_hits` | Of the last AI scan's tools, how many were served from cache rather than a real LLM call |
+| `security_llm_last_scan_total` | Total tools attempted in the last AI scan (cache hits + real calls) |
+| `has_llm_cache` | Whether any cached AI scan result exists for this server (drives the clear-cache icon) |
 
 ---
 
@@ -296,16 +393,29 @@ When the server is running (default `http://127.0.0.1:8282`). All endpoints resp
 ```
 tooldex/
 ├── __init__.py              # __version__ via importlib.metadata
-├── cli.py                   # Typer CLI — run command, flags, startup
-├── _cli_output.py           # print_banner(), print_summary(), result_as_json()
-├── settings.py              # debug flag
+├── cli.py                   # Typer CLI — `run` command definition only
+├── _ports.py                 # find_free_port()
+├── preferences.py            # load_prefs()/save_pref() — ~/.tooldex/preferences.json
+├── _spinner.py                # Spinner — "tooldexing  3s" terminal spinner
+├── _cli_output.py            # print_banner(), print_summary(), result_as_json()
+├── settings.py               # debug flag
 │
 ├── api/
-│   ├── app.py               # FastAPI factory, CORS, SPA mount
+│   ├── app.py                # FastAPI factory, CORS, SPA mount
+│   ├── redact.py              # redact_server(), friendly_path() — strips secrets from API responses
+│   ├── llm_jobs.py            # LlmJudgeJob tracking/cancellation, shared by servers.py + health.py
 │   └── routers/
-│       ├── health.py        # GET /api/health/, POST /api/rescan/
-│       ├── servers.py       # GET /api/servers/, /api/servers/{id}/, POST /api/servers/{id}/rescan/
-│       └── files.py         # GET /api/files/
+│       ├── health.py          # GET /api/health/
+│       ├── rescan.py          # POST /api/rescan/, GET /api/rescan/stream/
+│       ├── servers.py         # GET /api/servers/, /api/servers/{id}/, rescan + llm-scan endpoints
+│       └── files.py           # GET /api/files/
+│
+├── scanner/
+│   ├── __init__.py          # Re-exports the public surface (scan_servers, run_llm_judge_scan, ...)
+│   ├── config.py            # build_config() — TOOLDEX_LLM_* env vars, legacy MCP_SCANNER_LLM_* fallback
+│   ├── yara_scan.py         # scan_servers() — automatic, always-on fleet-wide YARA scan
+│   ├── llm_judge.py         # run_llm_judge_scan() (opt-in) + hydrate_llm_cache()
+│   └── llm_cache.py         # Persistent per-tool AI-scan cache (~/.tooldex/llm_scan_cache.json)
 │
 └── core/
     ├── models/
@@ -323,7 +433,7 @@ tooldex/
         ├── results.py           # DiscoverySource, ToolDiscoveryResult
         ├── mcp_client.py        # Async prober: stdio / http / sse
         ├── tool_discovery.py    # Sync wrappers, asyncio bridge
-        ├── to_manifest.py       # Discovery output → TooldexManifest
+        ├── to_manifest.py       # Discovery output → TooldexManifest, merge_security_findings()
         ├── _docker_mcp.py       # Docker MCP profile reader
         ├── _status_claude.py    # Enrich via `claude mcp list`
         ├── _status_codex.py     # Enrich via `codex mcp list`
@@ -347,6 +457,16 @@ The `POST /api/rescan` endpoint uses two mechanisms to stay safe under concurren
 
 All subprocess calls pass `stdin=subprocess.DEVNULL` to prevent interactive permission prompts from inheriting the terminal's stdin and blocking the request.
 
+### Security Scanning Pipeline
+
+**YARA** (`scan_servers()` in `scanner/yara_scan.py`) runs as part of every discovery and rescan, for every server, with no opt-in required — it's the only analyzer in `active_analyzers()`. `scanner/config.py` builds the shared mcpscanner `Config` (env vars + legacy fallback) that both YARA and the LLM judge use.
+
+**AI security scan** (`run_llm_judge_scan()` in `scanner/llm_judge.py`) is a separate, manual path invoked only via the `/api/servers/{id}/llm-scan/*` endpoints (handlers in `api/routers/servers.py`, job tracking/cancellation in `api/llm_jobs.py`), never from the automatic fleet-wide scan. Per tool, it checks `llm_cache` first (unless `force=True`), races the LLM call against a caller-supplied `cancel_event` so a stop request lands almost immediately instead of waiting out an in-flight request, and writes every real result back to the cache regardless of `force`.
+
+Because mcpscanner's own `Scanner` swallows LLM call failures internally (logs an error, then reports the tool as having no findings), a bad or expired API key would otherwise look identical to "no vulnerabilities found." `run_llm_judge_scan()` guards against this with an upfront one-token auth check plus a log-capture handler during the real scan loop, both mapping known HTTP status codes (401/403/429/etc.) to a `ValueError` instead of a false-clean result.
+
+**Caching** (`llm_cache.py`) is a flat JSON file at `~/.tooldex/llm_scan_cache.json`, keyed by `f"{server_id}::{tool_name}"`. Each entry stores a hash of the tool's name/description/input_schema alongside its verdict; a hash mismatch on lookup is treated as a miss. `hydrate_llm_cache()` (in `scanner/llm_judge.py`) reconstructs each server's `security_llm_*` display fields from this cache at manifest-build time — called from both `tooldex run` startup and `POST /api/rescan/` — so cached results survive a process restart with no LLM calls made. Both `hydrate_llm_cache()` and the `llm-scan` route handlers share one `merge_security_findings()` helper (in `core/discovery/to_manifest.py`) to replace a server's LLM findings and recompute its worst severity.
+
 ### Adding a New MCP Client
 
 **1. Add path resolvers** in `_paths.py` and register in `CLIENT_PRIORITY`:
@@ -366,7 +486,7 @@ def windsurf_project_path(cwd: Path) -> Optional[Path]:
 ("windsurf_user",    windsurf_user_path),
 ```
 
-**3. Wire up the UI** — add to `CLIENT_META` and `GROUP_ORDER` in `Servers.jsx`, then rebuild:
+**3. Wire up the UI** — add to `CLIENT_META` and `GROUP_ORDER` in `ui/src/components/servers/serverHelpers.jsx`, then rebuild:
 
 ```bash
 cd tooldex/ui && npm run build

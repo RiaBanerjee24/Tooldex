@@ -13,8 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from tooldex.api.routers import health, servers, files
-from tooldex import settings, version
+from tooldex.api.routers import health, rescan, servers, files
+from tooldex import __version__ as version, settings
 
 logger = logging.getLogger("tooldex.api")
 
@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
 
     # API routes
     app.include_router(health.router,  prefix="/api", tags=["health"])
+    app.include_router(rescan.router,  prefix="/api", tags=["rescan"])
     app.include_router(servers.router, prefix="/api", tags=["servers"])
     app.include_router(files.router,   prefix="/api", tags=["files"])
 

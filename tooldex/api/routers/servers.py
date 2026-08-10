@@ -1,46 +1,20 @@
 """GET /api/servers/, GET /api/servers/{id}/, POST /api/servers/{id}/rescan/"""
 import asyncio
-import re
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from tooldex.core.parsers.parser import get_parser, get_last_scanned
+from tooldex.api.redact import redact_server, friendly_path
+from tooldex.api.llm_jobs import (
+    LlmJudgeJob,
+    llm_job_running,
+    abort_llm_job,
+    run_llm_judge_job,
+    has_llm_cache,
+    get_job,
+    start_job,
+)
 
 router = APIRouter()
-
-_SENSITIVE_HEADERS = frozenset({"authorization", "x-api-key", "x-auth-token", "x-secret"})
-_SENSITIVE_ENV_SEGMENTS = frozenset({"key", "secret", "token", "password", "apikey"})
-
-
-def _is_sensitive_env(name: str) -> bool:
-    parts = re.split(r"[_\-]", name.lower())
-    return any(p in _SENSITIVE_ENV_SEGMENTS for p in parts)
-
-
-def _friendly_path(source_path) -> str | None:
-    """Return a ~-prefixed path rather than exposing the raw absolute path."""
-    if not source_path:
-        return None
-    try:
-        return "~" + str(Path(source_path).relative_to(Path.home()))
-    except ValueError:
-        return source_path
-
-
-def _redact_server(d: dict) -> dict:
-    """Replace values of sensitive HTTP headers and env vars with '***'."""
-    result = dict(d)
-    if result.get("headers"):
-        result["headers"] = {
-            k: "***" if k.lower() in _SENSITIVE_HEADERS else v
-            for k, v in result["headers"].items()
-        }
-    if result.get("env"):
-        result["env"] = {
-            k: "***" if _is_sensitive_env(k) else v
-            for k, v in result["env"].items()
-        }
-    return result
 
 
 @router.get("/servers")
@@ -51,13 +25,14 @@ async def list_servers():
     for server_id, server in manifest.servers.items():
         agents_connected = manifest.server_agents_index.get(server_id, [])
         tool_count = len(server.discovered_tools)
-        result.append(_redact_server({
+        result.append(redact_server({
             **server.model_dump(),
             "agents_connected": agents_connected,
             "agent_count": len(agents_connected),
             "tool_count": tool_count,
             "discovered_tool_count": tool_count,
-            "source_file": _friendly_path(server.source_path),
+            "source_file": friendly_path(server.source_path),
+            "has_llm_cache": has_llm_cache(server_id),
         }))
 
     total_tools = sum(len(s.discovered_tools) for s in manifest.servers.values())
@@ -70,7 +45,164 @@ async def list_servers():
     }
 
 
-@router.get("/servers/{server_id}")
+@router.post("/servers/{server_id:path}/rescan")
+async def rescan_server(server_id: str, force: bool = False):
+    """
+    Re-probe a single server, update its discovered tools, and (unless disabled
+    via TOOLDEX_SECURITY_SCAN/--no-security-scan) re-run its YARA security scan
+    too — keeps this server's CLEAN/no-scan state from going stale relative to
+    a tool list that just changed. Blocked while an LLM-judge scan is running
+    unless force=true.
+    """
+    from tooldex.core.discovery.tool_discovery import list_tools_for
+    from tooldex.core.models.server import DiscoveredToolLite
+
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
+
+    if llm_job_running(server_id):
+        if not force:
+            raise HTTPException(status_code=409, detail={"error": "llm_scan_running"})
+        await abort_llm_job(server_id)
+
+    from tooldex.core.discovery.probe_cache import invalidate
+    invalidate(server)
+
+    result = await asyncio.to_thread(list_tools_for, server)
+
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found after rescan"})
+
+    new_tools = [
+        DiscoveredToolLite(name=t.name, description=t.description, input_schema=t.input_schema)
+        for t in result.tools
+    ]
+    update = {
+        "discovered_tools": new_tools,
+        "probe_status": result.status.value,
+        "probe_error": result.error or None,
+    }
+
+    from tooldex.scanner import security_scan_enabled
+    security_scanned = server.security_scanned
+    if security_scan_enabled() and result.ok:
+        from tooldex.scanner import scan_servers
+        from tooldex.core.discovery.to_manifest import _security_data, merge_security_findings
+        from tooldex._silenced import silenced
+
+        scan_results = await asyncio.to_thread(silenced, scan_servers, {server_id: server})
+        fresh_yara_findings, _ = _security_data(scan_results.get(server_id, []))
+        merged, worst = merge_security_findings(server.security_findings, fresh_yara_findings, analyzer="YARA")
+        security_scanned = server_id in scan_results
+        update.update({
+            "security_findings": merged,
+            "security_risk": worst,
+            "security_scanned": security_scanned,
+        })
+    elif not security_scan_enabled():
+        print(f"\n  Security scan skipped for '{server.name}' — TOOLDEX_SECURITY_SCAN is set to false.", flush=True)
+
+    manifest.servers[server_id] = server.model_copy(update=update)
+
+    return {
+        "status": result.status.value,
+        "tool_count": len(new_tools),
+        "error": result.error,
+        "duration_ms": result.duration_ms,
+        "security_scanned": security_scanned,
+    }
+
+
+@router.post("/servers/{server_id:path}/llm-scan")
+async def llm_scan_server(server_id: str, force: bool = True):
+    """
+    Start the LLM-as-judge analyzer for one server as a background job. Poll
+    llm-scan/status for progress. `force` (default true — every UI-triggered
+    scan forces fresh calls) skips the per-tool cache and re-judges every
+    tool for real; results are still written to the cache either way.
+    """
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
+
+    if not server.discovered_tools:
+        raise HTTPException(status_code=400, detail={"error": "No discovered tools to scan"})
+
+    existing = get_job(server_id)
+    if existing and existing.status == "running":
+        return {"status": "running", "scanned": existing.scanned, "total": existing.total}
+
+    job = LlmJudgeJob(cancel_event=asyncio.Event(), total=len(server.discovered_tools))
+    start_job(server_id, job)
+    job.task = asyncio.create_task(run_llm_judge_job(server_id, server, job, force=force))
+
+    return {"status": "started", "total": job.total}
+
+
+@router.get("/servers/{server_id:path}/llm-scan/status")
+async def llm_scan_status(server_id: str):
+    """Poll progress of a running (or just-finished) LLM-judge job for this server."""
+    job = get_job(server_id)
+    if not job:
+        return {"status": "idle"}
+    return {
+        "status": job.status,
+        "scanned": job.scanned,
+        "total": job.total,
+        "findings_count": job.findings_count,
+        "security_risk": job.security_risk,
+        "error": job.error,
+    }
+
+
+@router.post("/servers/{server_id:path}/llm-scan/stop")
+async def llm_scan_stop(server_id: str):
+    """Signal a running LLM-judge job to stop."""
+    job = get_job(server_id)
+    if not job or job.status != "running":
+        return {"status": job.status if job else "idle"}
+    job.cancel_event.set()
+    return {"status": "stopping"}
+
+
+@router.post("/servers/{server_id:path}/llm-scan/invalidate-cache")
+async def llm_scan_invalidate_cache(server_id: str):
+    """
+    Remove all cached LLM-judge verdicts for this server and reset its
+    displayed LLM scan state back to "never scanned" — the cache no longer
+    backs those results, so showing them as current would be misleading.
+    """
+    from tooldex.scanner import llm_cache
+    from tooldex.core.discovery.to_manifest import merge_security_findings
+
+    removed = llm_cache.invalidate_server(server_id)
+
+    manifest = get_parser().manifest
+    current = manifest.get_server(server_id)
+    if current:
+        merged, worst = merge_security_findings(current.security_findings, [])
+        manifest.servers[server_id] = current.model_copy(update={
+            "security_findings": merged,
+            "security_risk": worst,
+            "security_llm_scanned_at": None,
+            "security_llm_new_findings": None,
+            "security_llm_cache_hits": None,
+            "security_llm_last_scan_total": None,
+        })
+
+    return {"status": "ok", "removed": removed}
+
+
+# Registered last (and uses the greedy `:path` converter) so it doesn't shadow
+# the more specific /servers/{server_id}/... GET routes above — Starlette
+# matches routes in registration order, and this pattern would otherwise
+# swallow any sub-path as part of server_id.
+@router.get("/servers/{server_id:path}")
 async def get_server(server_id: str):
     manifest = get_parser().manifest
     server = manifest.get_server(server_id)
@@ -83,49 +215,8 @@ async def get_server(server_id: str):
 
     agents_connected = manifest.server_agents_index.get(server_id, [])
 
-    return _redact_server({
+    return redact_server({
         **server.model_dump(),
         "agents_connected": agents_connected,
+        "has_llm_cache": has_llm_cache(server_id),
     })
-
-
-@router.post("/servers/{server_id}/rescan")
-async def rescan_server(server_id: str):
-    """Re-probe a single server and update its discovered tools in the manifest."""
-    from tooldex.core.discovery.tool_discovery import list_tools_for
-    from tooldex.core.models.server import DiscoveredToolLite
-
-    manifest = get_parser().manifest
-    server = manifest.get_server(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
-
-    # Invalidate cache so this result isn't served stale on the next CLI run
-    from tooldex.core.discovery.probe_cache import invalidate
-    invalidate(server)
-
-    result = await asyncio.to_thread(list_tools_for, server)
-
-    # Re-fetch after the thread in case a full rescan ran concurrently and
-    # replaced the manifest. Writing to a stale manifest would be a silent no-op.
-    manifest = get_parser().manifest
-    server = manifest.get_server(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found after rescan"})
-
-    new_tools = [
-        DiscoveredToolLite(name=t.name, description=t.description, input_schema=t.input_schema)
-        for t in result.tools
-    ]
-    manifest.servers[server_id] = server.model_copy(update={
-        "discovered_tools": new_tools,
-        "probe_status": result.status.value,
-        "probe_error": result.error or None,
-    })
-
-    return {
-        "status": result.status.value,
-        "tool_count": len(new_tools),
-        "error": result.error,
-        "duration_ms": result.duration_ms,
-    }

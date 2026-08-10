@@ -10,9 +10,8 @@ import { PdfGenerator }      from './formats/pdf.js'
 import { MarkdownGenerator } from './formats/markdown.js'
 
 const GENERATORS = {
-    'pdf-summary': new PdfGenerator({ mode: 'summary' }),
-    'pdf-full':    new PdfGenerator({ mode: 'full' }),
-    markdown:      new MarkdownGenerator(),
+    pdf:      new PdfGenerator(),
+    markdown: new MarkdownGenerator(),
 }
 
 export const SUPPORTED_FORMATS = Object.keys(GENERATORS)
@@ -21,9 +20,10 @@ export const SUPPORTED_FORMATS = Object.keys(GENERATORS)
  * Generate and download a report in the given format.
  * @param {ReportData} data    — from buildReportData()
  * @param {'pdf'|'markdown'} format
+ * @param {{ includeSecurity?: boolean, scopeLabel?: string }} options
  */
-export function generateReport(data, format) {
+export function generateReport(data, format, options = {}) {
     const generator = GENERATORS[format]
     if (!generator) throw new Error(`Unsupported report format: "${format}"`)
-    generator.generate(data)
+    generator.generate(data, options)
 }

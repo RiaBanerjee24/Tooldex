@@ -1,20 +1,4 @@
-"""
-tooldex/core/discovery/_docker_mcp.py
-
-Docker MCP Toolkit reader.
-
-`docker mcp profile ls --format json` returns ALL profiles with their full
-server and tool snapshots in one call — so we parse everything from that
-single output rather than doing a separate `profile show` per profile.
-
-`docker mcp profile show <id> --format json` is used as a per-profile
-fallback when the bulk listing isn't available or returns no data.
-
-Tools are embedded in the profile snapshot, so no live MCP probing is
-needed for Docker-managed servers.
-
-Private module — imported only by config_detector.py.
-"""
+"""tooldex/core/discovery/_docker_mcp.py — Docker MCP Toolkit reader. Private, imported only by config_detector.py."""
 from __future__ import annotations
 
 import json

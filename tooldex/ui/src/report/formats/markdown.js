@@ -2,7 +2,8 @@
 // MarkdownGenerator — produces a .md report and triggers a file download.
 // Implements the generator interface: generate(reportData) → void.
 
-import { fmtDateTime } from '../builder.js'
+import { fmtDateTime, serverCommandLine } from '../builder.js'
+import { groupServers } from '../../components/servers/serverHelpers.jsx'
 
 function download(content, filename) {
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
@@ -21,9 +22,12 @@ function mdTable(headers, rows) {
 }
 
 export class MarkdownGenerator {
-    generate(data) {
+    generate(data, options = {}) {
+        const { includeSecurity = false, scopeLabel = 'all' } = options
         const { meta, summary, agents, servers } = data
         const lines = []
+
+        const groups = groupServers(servers)
 
         // ── Header ────────────────────────────────────────────────────────────
         lines.push('# Tooldex — Security & Discovery Report', '')
@@ -40,7 +44,7 @@ export class MarkdownGenerator {
         lines.push('1. [Overview](#overview)')
         lines.push('2. [AI Agents](#ai-agents)')
         lines.push('3. [Servers & Tools](#servers--tools)')
-        lines.push('4. [Security Findings](#security-findings)')
+        if (includeSecurity) lines.push('4. [Security Findings](#security-findings)')
         lines.push('', '---', '')
 
         // ── Overview ──────────────────────────────────────────────────────────
@@ -61,58 +65,70 @@ export class MarkdownGenerator {
         // ── Agents ────────────────────────────────────────────────────────────
         lines.push('## AI Agents', '')
         lines.push(mdTable(
-            ['Client', 'Servers', 'Tools'],
-            agents.map(a => [a.client, String(a.serverCount), String(a.toolCount)])
+            ['Agent', 'Servers', 'Tools'],
+            agents.map(a => [a.agent, String(a.serverCount), String(a.toolCount)])
         ))
         lines.push('', '---', '')
 
         // ── Tools ─────────────────────────────────────────────────────────────
+        // Each server heading carries its agent ("Gemini:postman-mcp-server")
+        // and each tool name carries its server ("postman-mcp-server:createCollection"),
+        // so no separate per-agent sections or Server column are needed.
         lines.push('## Servers & Tools', '')
-        for (const s of servers) {
-            lines.push(`### ${s.name}`)
-            lines.push(`**Client:** ${s.client}  **Transport:** ${s.transport}`)
-            if (!s.tools.length) {
-                lines.push('_No tools discovered._', '')
-                continue
-            }
-            lines.push('')
-            lines.push(mdTable(
-                ['Tool', 'Description'],
-                s.tools.map(t => [
-                    `\`${t.name}\``,
-                    (t.description || '—').replace(/\|/g, '\\|'),
-                ])
-            ))
-            lines.push('')
-        }
-        lines.push('---', '')
-
-        // ── Security ──────────────────────────────────────────────────────────
-        lines.push('## Security Findings', '')
-        const flagged = servers.filter(s => s.findings.length > 0)
-        if (!flagged.length) {
-            lines.push('_No security findings detected across all scanned servers._', '')
-        } else {
-            for (const s of flagged) {
-                lines.push(`### ${s.name}`, '')
+        for (const group of groups) {
+            for (const s of group.servers) {
+                lines.push(`### ${group.key}:${s.name}`)
+                const metaParts = []
+                if (s.transport) metaParts.push(`**Transport:** ${s.transport}`)
+                if (s.package) metaParts.push(`**Package:** ${s.package}`)
+                const cmd = serverCommandLine(s)
+                if (cmd) metaParts.push(`**Command:** \`${cmd}\``)
+                if (metaParts.length) lines.push(metaParts.join('  '))
+                if (!s.tools.length) {
+                    lines.push('_No tools discovered._', '')
+                    continue
+                }
+                lines.push('')
                 lines.push(mdTable(
-                    ['Tool', 'Severity', 'Analyzer', 'Category', 'Summary'],
-                    s.findings.map(f => [
-                        f.tool_name || '—',
-                        f.severity || '—',
-                        f.analyzer || '—',
-                        f.threat_category || '—',
-                        (f.summary || '—').replace(/\|/g, '\\|'),
+                    ['Tool', 'Description'],
+                    s.tools.map(t => [
+                        `\`${s.name}:${t.name}\``,
+                        (t.description || '—').replace(/\|/g, '\\|'),
                     ])
                 ))
                 lines.push('')
             }
         }
-
         lines.push('---', '')
+
+        // ── Security ──────────────────────────────────────────────────────────
+        if (includeSecurity) {
+            lines.push('## Security Findings', '')
+            const flagged = servers.filter(s => s.findings.length > 0)
+            if (!flagged.length) {
+                lines.push('_No security findings detected across all scanned servers._', '')
+            } else {
+                for (const s of flagged) {
+                    lines.push(`### ${s.name}`, '')
+                    lines.push(mdTable(
+                        ['Tool', 'Severity', 'Analyzer', 'Category', 'Summary'],
+                        s.findings.map(f => [
+                            f.tool_name || '—',
+                            f.severity || '—',
+                            f.analyzer || '—',
+                            f.threat_category || '—',
+                            (f.summary || '—').replace(/\|/g, '\\|'),
+                        ])
+                    ))
+                    lines.push('')
+                }
+            }
+            lines.push('---', '')
+        }
+
         lines.push(`_Report generated by [Tooldex](${meta.repoUrl})_`)
 
-        const filename = `tooldex-report-${new Date().toISOString().slice(0, 10)}.md`
+        const filename = `tooldex-report-${scopeLabel}-${new Date().toISOString().slice(0, 10)}.md`
         download(lines.join('\n'), filename)
     }
 }

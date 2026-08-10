@@ -88,6 +88,44 @@ class TestReadJson:
         assert source.path == str(path)
 
 
+class TestReadJsonCustomKey:
+    """VSCode's mcp.json nests servers under "servers", not "mcpServers"."""
+
+    def test_reads_servers_key_when_given(self, tmp_path):
+        path = tmp_path / "mcp.json"
+        path.write_text(json.dumps({
+            "servers": {
+                "desktop-commander": {"type": "stdio", "command": "npx", "args": ["-y", "pkg"]},
+            },
+            "inputs": [{"id": "unused", "type": "promptString"}],
+        }))
+        source = read_json("vscode_project", path, env={}, key="servers")
+        assert source.status == SourceStatus.FOUND
+        assert source.servers[0].id == "desktop-commander"
+        assert source.servers[0].command == "npx"
+
+    def test_mcp_servers_key_ignored_when_custom_key_requested(self, tmp_path):
+        path = tmp_path / "mcp.json"
+        path.write_text(json.dumps({"mcpServers": {"fs": {"command": "npx"}}}))
+        source = read_json("vscode_project", path, env={}, key="servers")
+        assert source.status == SourceStatus.EMPTY
+        assert '"servers"' in source.error
+
+    def test_unresolved_input_placeholder_passes_through(self, tmp_path):
+        path = tmp_path / "mcp.json"
+        path.write_text(json.dumps({
+            "servers": {
+                "unity-mcp": {
+                    "type": "stdio",
+                    "command": "uv",
+                    "args": ["--directory", "${input:unity_mcp_server_src}", "run", "server.py"],
+                },
+            },
+        }))
+        source = read_json("vscode_project", path, env={}, key="servers")
+        assert source.servers[0].args == ["--directory", "${input:unity_mcp_server_src}", "run", "server.py"]
+
+
 class TestReadCodexToml:
     def test_missing_file_returns_not_found(self, tmp_path):
         path = tmp_path / "config.toml"

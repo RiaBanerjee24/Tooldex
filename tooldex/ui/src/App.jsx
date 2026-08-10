@@ -17,6 +17,8 @@ export default function App() {
     const [rescanSeconds, setRescanSeconds] = useState(0)
     // Per-server scan state: Map<server_id, "scanning" | "done" | "error">
     const [serverScanState, setServerScanState] = useState(new Map())
+    // Server ids with an in-flight AI security scan
+    const [rescanBlockedBy, setRescanBlockedBy] = useState(null)
     const esRef = useRef(null)
 
     useEffect(() => {
@@ -33,20 +35,27 @@ export default function App() {
         setTab("Servers")
     }
 
-    const handleRescan = () => {
+    const handleRescan = (force = false) => {
         if (rescanState === "scanning") return
         setRescanState("scanning")
+        setRescanBlockedBy(null)
 
         // Mark all known servers as scanning immediately
         const ids = (servers?.servers || []).map(s => s.id)
         setServerScanState(new Map(ids.map(id => [id, "scanning"])))
 
-        const es = new EventSource("/api/rescan/stream")
+        const es = new EventSource(`/api/rescan/stream${force ? "?force=true" : ""}`)
         esRef.current = es
 
         es.onmessage = (e) => {
             const msg = JSON.parse(e.data)
-            if (msg.type === "result") {
+            if (msg.type === "blocked") {
+                es.close()
+                esRef.current = null
+                setRescanState("idle")
+                setServerScanState(new Map())
+                setRescanBlockedBy(msg.servers || [])
+            } else if (msg.type === "result") {
                 setServerScanState(prev => {
                     const next = new Map(prev)
                     next.set(msg.server_id, msg.status === "found" ? "done" : "error")
@@ -99,11 +108,49 @@ export default function App() {
                             Documentation ↗
                         </a>
                     </div>
+                    {rescanBlockedBy && (
+                        <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            gap: 12, marginTop: 14, padding: "9px 14px",
+                            background: "var(--surface3)", border: "1px solid var(--yellow-muted)",
+                            borderRadius: "var(--radius)",
+                        }}>
+                            <span style={{
+                                fontSize: 11.5, color: "var(--text2)", fontFamily: "Menlo, Consolas, monospace",
+                            }}>
+                                AI security scan in progress on {rescanBlockedBy.length} server{rescanBlockedBy.length === 1 ? "" : "s"} — rescanning now will abort {rescanBlockedBy.length === 1 ? "it" : "them"} mid-scan.
+                            </span>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                <button
+                                    onClick={() => setRescanBlockedBy(null)}
+                                    style={{
+                                        padding: "4px 10px", background: "var(--surface2)",
+                                        border: "1px solid var(--border2)", borderRadius: "var(--radius)",
+                                        cursor: "pointer", fontSize: 10.5, color: "var(--text3)",
+                                        fontFamily: "Menlo, Consolas, monospace",
+                                    }}
+                                >
+                                    cancel
+                                </button>
+                                <button
+                                    onClick={() => handleRescan(true)}
+                                    style={{
+                                        padding: "4px 10px", background: "var(--red-bg)",
+                                        border: "1px solid var(--red-border)", borderRadius: "var(--radius)",
+                                        cursor: "pointer", fontSize: 10.5, color: "var(--red)",
+                                        fontFamily: "Menlo, Consolas, monospace",
+                                    }}
+                                >
+                                    force rescan
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {tab === "Dashboard" && (
                         <Dashboard
                             health={health}
                             serversData={servers}
-                            onNavigateServers={() => setTab("Servers")}
+                            onNavigateServers={() => { setSelectedServerId(null); setTab("Servers") }}
                             onNavigateToServer={navigateToServer}
                             onRescan={handleRescan}
                             rescanState={rescanState}

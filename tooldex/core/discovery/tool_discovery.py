@@ -70,7 +70,7 @@ def list_tools_for_all(
     still_to_probe: list[MCPServer] = []
 
     if use_cache:
-        from tooldex.core.discovery.probe_cache import get_cached, put_cached as _put
+        from tooldex.core.discovery.probe_cache import get_cached
         for s in to_probe:
             hit = get_cached(s, ttl=cache_ttl)
             if hit is not None:

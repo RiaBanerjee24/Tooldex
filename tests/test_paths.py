@@ -8,8 +8,12 @@ from tooldex.core.discovery._paths import (
     build_plan,
     claude_code_project_path,
     codex_project_path,
+    copilot_cli_user_path,
     cursor_project_path,
     mcp_json_project_path,
+    vscode_project_dotfile_path,
+    vscode_project_path,
+    vscode_user_path,
     walk_up_for,
 )
 
@@ -103,6 +107,36 @@ class TestProjectPathResolvers:
     def test_antigravity_user_path(self, fake_home):
         assert antigravity_user_path() == fake_home / ".gemini" / "antigravity" / "mcp_config.json"
 
+    def test_vscode_project_path(self, fake_home):
+        project = fake_home / "project"
+        vscode_dir = project / ".vscode"
+        vscode_dir.mkdir(parents=True)
+        (vscode_dir / "mcp.json").write_text("{}")
+        assert vscode_project_path(project) == vscode_dir / "mcp.json"
+
+    def test_vscode_project_none_when_absent(self, fake_home):
+        project = fake_home / "project"
+        project.mkdir()
+        assert vscode_project_path(project) is None
+
+    def test_vscode_project_dotfile_path(self, fake_home):
+        project = fake_home / "project"
+        vscode_dir = project / ".vscode"
+        vscode_dir.mkdir(parents=True)
+        (vscode_dir / ".mcp.json").write_text("{}")
+        assert vscode_project_dotfile_path(project) == vscode_dir / ".mcp.json"
+
+    def test_vscode_project_dotfile_none_when_absent(self, fake_home):
+        project = fake_home / "project"
+        project.mkdir()
+        assert vscode_project_dotfile_path(project) is None
+
+    def test_vscode_user_path(self, fake_home):
+        assert vscode_user_path() == fake_home / ".config" / "Code" / "User" / "mcp.json"
+
+    def test_copilot_cli_user_path(self, fake_home):
+        assert copilot_cli_user_path() == fake_home / ".copilot" / "mcp-config.json"
+
 
 class TestBuildPlan:
     def test_returns_expected_client_ids(self, fake_home):
@@ -114,6 +148,10 @@ class TestBuildPlan:
             "claude_code_project",
             "cursor_project",
             "cursor_user",
+            "vscode_project",
+            "vscode_project_dotfile",
+            "vscode_user",
+            "copilot_cli_user",
             "mcp_json_project",
             "mcp_json_user",
             "mcp_json_bare_project",
