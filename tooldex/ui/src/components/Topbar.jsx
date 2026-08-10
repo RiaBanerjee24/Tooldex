@@ -38,6 +38,22 @@ export function Topbar({ tab, setTab, health }) {
                         ))}
                     </div>
 
+                    {/* tooldex.dev */}
+                    <a
+                        href="https://tooldex.dev/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                            fontSize: 12, color: "var(--lime-dim)", textDecoration: "none",
+                            fontFamily: "var(--font-body)", fontWeight: 600, whiteSpace: "nowrap",
+                            borderBottom: "1px solid transparent", transition: "color 0.12s, border-color 0.12s",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = "var(--lime)"; e.currentTarget.style.borderColor = "var(--lime)" }}
+                        onMouseLeave={e => { e.currentTarget.style.color = "var(--lime-dim)"; e.currentTarget.style.borderColor = "transparent" }}
+                    >
+                        tooldex.dev ↗
+                    </a>
+
                     {/* Status pill */}
                     {/* {health && (
                         <div style={{
