@@ -8,13 +8,9 @@ from __future__ import annotations
 
 import json5
 import logging
+import tomllib
 from pathlib import Path
 from typing import Optional
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
 
 from tooldex.core.discovery._parsers import parse_claude_json, parse_mcp_servers
 from tooldex.core.discovery._paths import claude_code_user_path
