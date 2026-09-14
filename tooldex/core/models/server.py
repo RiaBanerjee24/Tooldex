@@ -53,6 +53,13 @@ class MCPServer(BaseModel):
     # Human-readable error from the last failed probe, if any.
     probe_error: Optional[str] = None
 
+    # Approval state for stdio servers (see core/discovery/trust_store.py).
+    # "pending" | "allowed" | "denied" | "changed" | None (non-stdio, ungated).
+    trust_status: Optional[str] = None
+    # Diff of what changed since approval, only populated when trust_status
+    # == "changed". Each entry: {tool, change, before, after}.
+    trust_diff: list[dict] = Field(default_factory=list)
+
     # Security scan results from the last run.
     # Each finding: {tool_name, severity, analyzer, threat_category, summary}
     security_findings: list[dict] = Field(default_factory=list)

@@ -2,6 +2,7 @@
 import asyncio
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from tooldex.core.parsers.parser import get_parser, get_last_scanned
 from tooldex.api.redact import redact_server, friendly_path
 from tooldex.api.llm_jobs import (
@@ -43,6 +44,78 @@ async def list_servers():
         "total_tools": total_tools,
         "scanned_at": get_last_scanned(),
     }
+
+
+class TrustDecisionBody(BaseModel):
+    decision: str  # "allow" | "deny"
+
+
+@router.post("/servers/{server_id:path}/trust")
+async def set_server_trust(server_id: str, body: TrustDecisionBody):
+    """
+    Approve or deny a stdio server's ability to be spawned/probed.
+
+    Only records the decision — it does not itself probe the server. The UI
+    (or a subsequent rescan) fetches tools afterwards; that's a deliberate
+    separation so approving is never accidentally coupled to an implicit
+    spawn happening synchronously inside this request.
+    """
+    if body.decision not in ("allow", "deny"):
+        raise HTTPException(status_code=400, detail={"error": "decision must be 'allow' or 'deny'"})
+
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
+
+    from tooldex.core.discovery import trust_store
+    from tooldex.core.discovery.probe_cache import invalidate
+
+    trust_store.set_decision(server, body.decision, server_name=server.name)
+    if body.decision == "allow":
+        # A prior "not_trusted" probe result may still be cached — bust it so
+        # the next rescan actually attempts the now-approved server instead
+        # of replaying a stale denial for up to the cache TTL.
+        invalidate(server)
+
+    new_status = "allowed" if body.decision == "allow" else "denied"
+    manifest.servers[server_id] = server.model_copy(update={
+        "trust_status": new_status,
+        "trust_diff": [],
+    })
+
+    return {"status": "ok", "trust_status": new_status}
+
+
+@router.delete("/servers/{server_id:path}/trust")
+async def revoke_server_trust(server_id: str):
+    """
+    Revoke a prior approve/deny decision, returning the server to "pending".
+
+    Also clears previously discovered tools/security data for this server —
+    Tooldex no longer vouches for what it showed under a trust decision that
+    was just withdrawn.
+    """
+    manifest = get_parser().manifest
+    server = manifest.get_server(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail={"error": f"Server '{server_id}' not found"})
+
+    from tooldex.core.discovery import trust_store
+
+    trust_store.remove_decision(server)
+    manifest.servers[server_id] = server.model_copy(update={
+        "trust_status": "pending",
+        "trust_diff": [],
+        "discovered_tools": [],
+        "probe_status": None,
+        "probe_error": None,
+        "security_findings": [],
+        "security_risk": None,
+        "security_scanned": False,
+    })
+
+    return {"status": "ok", "trust_status": "pending"}
 
 
 @router.post("/servers/{server_id:path}/rescan")

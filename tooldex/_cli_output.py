@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import typer
 
-from tooldex.core.discovery.results import ConfigDetectionResult, ToolDiscoveryResult
+from tooldex.core.discovery.results import ConfigDetectionResult, ToolDiscoveryResult, ToolDiscoveryStatus
 
 
 def print_banner(server_count: int, tool_count: int, url: str) -> None:
@@ -72,7 +72,7 @@ def print_summary(
             if result is None:
                 typer.echo(f"  •  {display:<22}  (probe skipped)")
                 continue
-            symbol, color = _status_symbol(result.status.value)
+            symbol, color = _status_symbol("changed" if result.tools_changed else result.status.value)
             if result.ok:
                 dur = f"  {typer.style(str(result.duration_ms) + 'ms', dim=True)}" if result.duration_ms else ""
                 typer.echo(
@@ -86,6 +86,10 @@ def print_summary(
                 )
                 if result.error:
                     typer.echo(f"     └─ {typer.style(result.error, fg='red', dim=True)}")
+            if result.tools_changed:
+                typer.echo(
+                    f"     └─ {typer.style('tool list changed since approval — needs fresh approval to get the live tool list', fg='yellow', dim=True)}"
+                )
 
     checked = config_result.checked
     servers = len(config_result.servers)
@@ -95,6 +99,26 @@ def print_summary(
         f"Checked {checked} config locations · {servers} servers · {found_tools} tools",
         bold=True,
     ))
+
+    not_trusted = [r for r in tool_results if r.status == ToolDiscoveryStatus.NOT_TRUSTED]
+    if not_trusted:
+        from tooldex.core.discovery import trust_store
+
+        declined = sum(
+            1 for r in not_trusted
+            if (s := config_result.servers.get(r.server_id)) is not None
+            and trust_store.get_decision(s) == "deny"
+        )
+        pending = len(not_trusted) - declined
+        parts = []
+        if declined:
+            parts.append(f"{declined} declined")
+        if pending:
+            parts.append(f"{pending} pending approval")
+        typer.echo(typer.style(
+            f"Not probed: {', '.join(parts)} — run `tooldex trust <name>` to approve.",
+            fg="yellow",
+        ))
 
 
 def result_as_json(
@@ -134,6 +158,8 @@ def _status_symbol(status: str) -> tuple[str, str]:
         "not_found":   ("·", "white"),
         "parse_error": ("✗", "red"),
         "read_error":  ("✗", "red"),
+        "not_trusted": ("○", "yellow"),
+        "changed":     ("⚠", "yellow"),
     }
     return table.get(status, ("✗", "red"))
 

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { SidebarBtn, ProvenanceDot } from "../ui.jsx"
-import { classifyClient, effectiveStatus, ConnectionStatusBadge, ScopeTag, SecurityStatusIcon } from "./serverHelpers.jsx"
+import { classifyClient, effectiveStatus, ConnectionStatusBadge, ScopeTag, SecurityStatusIcon, TrustStatusBadge } from "./serverHelpers.jsx"
 
 export function ServerSidebarList({ filteredGroups, sel, setSel, serverScanState }) {
     const flatItems = useMemo(() => {
@@ -86,6 +86,9 @@ export function ServerSidebarList({ filteredGroups, sel, setSel, serverScanState
                                     <span>{s.agent_count}a · {s.transport}</span>
                                     <ScopeTag scope={scope} />
                                     <ConnectionStatusBadge status={effectiveStatus(s)} />
+                                    {s.trust_status && s.trust_status !== "allowed" && (
+                                        <TrustStatusBadge status={s.trust_status} />
+                                    )}
                                     <SecurityStatusIcon risk={s.security_risk} scanned={s.security_scanned} />
                                 </div>
                             </SidebarBtn>

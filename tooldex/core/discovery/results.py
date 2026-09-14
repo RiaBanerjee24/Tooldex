@@ -32,6 +32,7 @@ class ToolDiscoveryStatus(str, Enum):
     PROTOCOL_ERROR = "protocol_error"      # handshake or list_tools raised
     UNSUPPORTED_TRANSPORT = "unsupported_transport"  # e.g. sse when only stdio built
     MISSING_COMMAND = "missing_command"    # stdio server has no `command` field
+    NOT_TRUSTED = "not_trusted"            # stdio server not approved to run — never spawned
 
 
 @dataclass
@@ -64,6 +65,9 @@ class ToolDiscoveryResult:
     tools: list[DiscoveredTool] = field(default_factory=list)
     error: Optional[str] = None
     duration_ms: Optional[int] = None       # wall time for the probe; None on immediate failures
+    # True when this server was previously approved, already had a baseline
+    # tool snapshot on file, and this probe's tools no longer match it.
+    tools_changed: bool = False
 
     @property
     def ok(self) -> bool:

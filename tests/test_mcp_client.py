@@ -236,9 +236,12 @@ class TestProbeServerRouting:
     @pytest.mark.asyncio
     async def test_stdio_routes_to_probe_stdio(self):
         server = _server(transport="stdio")
-        with patch.object(mcp_client, "_probe_stdio", new=AsyncMock(
-            return_value=SimpleNamespace(server_id="a:srv", status=ToolDiscoveryStatus.FOUND, ok=True, tools=[], duration_ms=None)
-        )) as mock_probe:
+        with patch.object(mcp_client.trust_store, "get_decision", return_value="allow"), \
+             patch.object(mcp_client.trust_store, "files_changed_since_approval", return_value=False), \
+             patch.object(mcp_client.trust_store, "record_probe_result", return_value=False), \
+             patch.object(mcp_client, "_probe_stdio", new=AsyncMock(
+                return_value=SimpleNamespace(server_id="a:srv", status=ToolDiscoveryStatus.FOUND, ok=True, tools=[], duration_ms=None)
+            )) as mock_probe:
             result = await mcp_client.probe_server(server)
         mock_probe.assert_called_once()
         assert result.status == ToolDiscoveryStatus.FOUND
@@ -276,6 +279,80 @@ class TestProbeServerRouting:
              patch.object(mcp_client, "_probe_via_agent", new=AsyncMock()) as mock_agent:
             await mcp_client.probe_server(server)
         mock_agent.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Trust gate
+# ---------------------------------------------------------------------------
+
+class TestTrustGate:
+    @pytest.mark.asyncio
+    async def test_pending_stdio_server_is_never_spawned(self):
+        server = _server(transport="stdio")
+        with patch.object(mcp_client.trust_store, "get_decision", return_value=None), \
+             patch("asyncio.create_subprocess_exec", new=AsyncMock()) as mock_spawn, \
+             patch.object(mcp_client, "_probe_stdio", new=AsyncMock()) as mock_probe:
+            result = await mcp_client.probe_server(server)
+        mock_probe.assert_not_called()
+        mock_spawn.assert_not_called()
+        assert result.status == ToolDiscoveryStatus.NOT_TRUSTED
+
+    @pytest.mark.asyncio
+    async def test_denied_stdio_server_is_never_spawned(self):
+        server = _server(transport="stdio")
+        with patch.object(mcp_client.trust_store, "get_decision", return_value="deny"), \
+             patch.object(mcp_client, "_probe_stdio", new=AsyncMock()) as mock_probe:
+            result = await mcp_client.probe_server(server)
+        mock_probe.assert_not_called()
+        assert result.status == ToolDiscoveryStatus.NOT_TRUSTED
+
+    @pytest.mark.asyncio
+    async def test_http_server_ignores_trust_store_entirely(self):
+        server = _server(transport="http", command=None, url="https://x")
+        ok_result = SimpleNamespace(server_id="a:srv", status=ToolDiscoveryStatus.FOUND, ok=True, tools=["t"], error=None, duration_ms=1)
+        with patch.object(mcp_client.trust_store, "get_decision", return_value="deny") as mock_decision, \
+             patch.object(mcp_client, "_probe_http", new=AsyncMock(return_value=ok_result)):
+            result = await mcp_client.probe_server(server)
+        mock_decision.assert_not_called()
+        assert result.status == ToolDiscoveryStatus.FOUND
+
+    @pytest.mark.asyncio
+    async def test_successful_allowed_probe_records_result_and_flags_drift(self):
+        server = _server(transport="stdio")
+        found = SimpleNamespace(server_id="a:srv", status=ToolDiscoveryStatus.FOUND, ok=True, tools=["t"], duration_ms=1)
+        with patch.object(mcp_client.trust_store, "get_decision", return_value="allow"), \
+             patch.object(mcp_client.trust_store, "files_changed_since_approval", return_value=False), \
+             patch.object(mcp_client.trust_store, "record_probe_result", return_value=True) as mock_record, \
+             patch.object(mcp_client, "_probe_stdio", new=AsyncMock(return_value=found)):
+            result = await mcp_client.probe_server(server)
+        mock_record.assert_called_once_with(server, found.tools)
+        assert result.tools_changed is True
+
+    @pytest.mark.asyncio
+    async def test_file_changed_since_approval_serves_stale_tools_without_executing(self):
+        server = _server(transport="stdio")
+        stale = [{"name": "echo", "description": "old desc", "input_schema": {}}]
+        with patch.object(mcp_client.trust_store, "get_decision", return_value="allow"), \
+             patch.object(mcp_client.trust_store, "files_changed_since_approval", return_value=True), \
+             patch.object(mcp_client.trust_store, "get_approved_tools", return_value=stale), \
+             patch.object(mcp_client, "_probe_stdio", new=AsyncMock()) as mock_probe:
+            result = await mcp_client.probe_server(server)
+        mock_probe.assert_not_called()
+        assert result.status == ToolDiscoveryStatus.FOUND
+        assert result.tools_changed is True
+        assert [t.name for t in result.tools] == ["echo"]
+        assert "needs fresh approval" in result.error
+
+    @pytest.mark.asyncio
+    async def test_failed_allowed_probe_does_not_touch_trust_store(self):
+        server = _server(transport="stdio")
+        failed = SimpleNamespace(server_id="a:srv", status=ToolDiscoveryStatus.TIMEOUT, ok=False, tools=[], duration_ms=1)
+        with patch.object(mcp_client.trust_store, "get_decision", return_value="allow"), \
+             patch.object(mcp_client.trust_store, "files_changed_since_approval", return_value=False), \
+             patch.object(mcp_client.trust_store, "record_probe_result") as mock_record, \
+             patch.object(mcp_client, "_probe_stdio", new=AsyncMock(return_value=failed)):
+            await mcp_client.probe_server(server)
+        mock_record.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
