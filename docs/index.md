@@ -36,7 +36,7 @@ Tooldex scans config files, probes each discovered server for its tool surface, 
 
 ```
   ╔══════════════════════════════════════════════════╗
-  ║         tooldex  v1.0.1                         ║
+  ║         tooldex  v1.0.2                         ║
   ╠══════════════════════════════════════════════════╣
   ║  Servers  12                                     ║
   ║  Tools    187                                    ║
@@ -59,11 +59,51 @@ When you run `tooldex run`, the following happens in order:
 
 1. **Config scan** — Tooldex reads every known MCP config location for the current directory. Each found server gets a qualified ID in the form `{client}:{server_name}` so servers from different clients never collide.
 
-2. **Live probe** — Each discovered server is contacted concurrently. Tooldex calls `tools/list` on it and records which tools it exposes, and any errors.
+2. **Live probe** — Each discovered server is contacted concurrently. HTTP/SSE servers are probed immediately. **stdio servers require your approval first** — Tooldex has to execute the server's command to list its tools, so it asks before doing that (see [Trust Gate](#trust-gate-stdio-execution-approval)). Once approved, Tooldex calls `tools/list` on it and records which tools it exposes, and any errors.
 
 3. **Deduplication** — If the same server name appears in multiple clients (e.g., `browserbase` in both Claude Code and Cursor), both are retained as separate entries under their respective clients.
 
 4. **UI** — A local web server starts and serves the unified view.
+
+---
+
+## Trust Gate (stdio execution approval)
+
+Listing a stdio server's tools means running its `command` — that's inherent to the protocol, there's no way to enumerate tools without executing it. A malicious or compromised config could otherwise achieve code execution the moment you point Tooldex at a directory, before you ever see what it does. Tooldex will not spawn any stdio server without explicit approval.
+
+**Approving a server:**
+
+- **CLI** — on `tooldex run`, any stdio server with no recorded decision yet is presented interactively:
+
+  ```
+    "my-server" is a stdio MCP server. To list its tools, Tooldex needs to execute it:
+
+        python3 server.py
+
+    Approve execution?
+
+      1  Yes
+      2  Yes, for all stdio servers
+      3  No
+  ```
+
+  Decisions persist in `~/.tooldex/trust_store.json`, keyed to that server's exact `command`/`args`/`env` — editing the invocation later is treated as a new, unapproved server, not a silently-still-trusted one.
+
+- **UI** — the Servers view shows Approve/Deny buttons for any pending stdio server, and a revoke action for one already approved.
+- **Non-interactive** — `--trust-all-stdio` approves every pending stdio server without prompting (for CI/scripted use — this bypasses the review the prompt exists for); `tooldex trust <name>` / `tooldex untrust <name>` change a decision without a full interactive run.
+
+HTTP/SSE servers don't fork a local process and are never gated.
+
+### Drift detection — an approval doesn't trust the server forever
+
+An already-approved server is re-checked, before every execution, two ways:
+
+1. **Local script changes** — for a stdio command that runs a local file (`python server.py`, `node ./server.js`), Tooldex hashes that entry point and every other source file in its directory tree (so a sibling module the entry point imports is covered too, not just the file named in the config) at approval time, then checks those hashes again before every subsequent run — before spawning anything. A mismatch means the approved server is **never executed on the strength of the stale approval**: Tooldex serves the last-known tool list instead and flags the server `changed`, requiring a fresh approval to run the current code. Checking is cheap even for larger trees — a file's size/mtime is compared first, and only re-read/re-hashed if that looks different. This only applies to a directly-referenced local script; a command launched via `npx`/`uvx`/an installed binary has no single file to pin.
+2. **Tool list changes** — after any successful probe, the returned tool names/descriptions/schemas are compared against the approved baseline. A difference also flags the server `changed`.
+
+Either way, re-approving (`tooldex trust <name>`, or the UI's "approve changes") accepts the current state as the new baseline.
+
+**Reinstalling Tooldex clears all trust decisions.** Trust data lives in `~/.tooldex/`, outside the installed package, so it would otherwise survive an uninstall/reinstall — which is wrong for security-relevant state. A fresh install (or a reinstall of the same version) is detected automatically and wipes `~/.tooldex/trust_store.json`.
 
 ---
 
@@ -241,6 +281,8 @@ tooldex [OPTIONS] COMMAND [ARGS]
 | `--config <path>` | — | Additional MCP config file to include. Repeatable. |
 | `--no-cache` | off | Bypass the probe cache and re-probe every server live. |
 | `--no-security-scan` | off | Skip the automatic YARA security scan (see [Security Scanning](#security-scanning)). Equivalent to `TOOLDEX_SECURITY_SCAN=false`, and also applies to later "rescan all" calls for the life of this server. |
+| `--trust-all-stdio` | off | Approve every pending stdio server without prompting (see [Trust Gate](#trust-gate-stdio-execution-approval)). For CI/scripted use. |
+| `--reset-trust <name>` | — | Clear a previously recorded trust decision by server name, so it's prompted for again this run. Repeatable. |
 
 #### Examples
 
@@ -262,6 +304,25 @@ tooldex run --json | jq '.duplicates'
 
 # Skip the automatic YARA security scan entirely
 tooldex run --no-security-scan
+
+# Approve every pending stdio server without prompting (CI/scripted use)
+tooldex run --trust-all-stdio
+```
+
+### `tooldex trust <name>`
+
+Approve a stdio server by name, without a full interactive `tooldex run`.
+
+```bash
+tooldex trust my-server
+```
+
+### `tooldex untrust <name>`
+
+Revoke a server's trust decision, returning it to pending.
+
+```bash
+tooldex untrust my-server
 ```
 
 ---
@@ -363,6 +424,8 @@ When the server is running (default `http://127.0.0.1:8282`). All endpoints resp
 | `GET` | `/api/servers/` | All MCP servers with `total_servers`, `total_tools`, `scanned_at`. Per server: `tool_count`, `source_file`, `has_llm_cache`, and the `security_*` fields below |
 | `GET` | `/api/servers/{id}/` | Single server with full tool detail |
 | `POST` | `/api/servers/{id}/rescan/` | Re-probe a single server, update its tools in place, and (if the probe succeeds and `TOOLDEX_SECURITY_SCAN` isn't disabled) re-run its YARA scan too. `force=true` aborts an in-flight AI security scan on this server first; otherwise returns `409 {"error": "llm_scan_running"}` while one is running |
+| `POST` | `/api/servers/{id}/trust/` | Approve or deny a stdio server. Body `{"decision": "allow"\|"deny"}` |
+| `DELETE` | `/api/servers/{id}/trust/` | Revoke a prior decision, returning the server to `pending` |
 | `POST` | `/api/servers/{id}/llm-scan/` | Start the AI security scan for one server as a background job. `force` (default `true`) skips the cache and forces fresh LLM calls; results are cached either way |
 | `GET` | `/api/servers/{id}/llm-scan/status/` | Poll progress (`scanned`/`total`) and outcome of the AI security scan job for this server |
 | `POST` | `/api/servers/{id}/llm-scan/stop/` | Signal a running AI security scan to stop |
@@ -383,6 +446,12 @@ When the server is running (default `http://127.0.0.1:8282`). All endpoints resp
 | `security_llm_cache_hits` | Of the last AI scan's tools, how many were served from cache rather than a real LLM call |
 | `security_llm_last_scan_total` | Total tools attempted in the last AI scan (cache hits + real calls) |
 | `has_llm_cache` | Whether any cached AI scan result exists for this server (drives the clear-cache icon) |
+
+**Per-server trust field** (on `/api/servers/` and `/api/servers/{id}/`):
+
+| Field | Description |
+|---|---|
+| `trust_status` | `pending` / `allowed` / `denied` / `changed` for a stdio server; `null` for HTTP/SSE (never gated) |
 
 ---
 

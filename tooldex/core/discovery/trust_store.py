@@ -194,28 +194,6 @@ def record_probe_result(server: "MCPServer", tools: list["DiscoveredTool"]) -> b
     return fresh != baseline
 
 
-def diff_tools(approved: list[dict], current: list[dict]) -> list[dict]:
-    """
-    Compare two tool snapshots (as stored/produced by snapshot_tools) and return
-    a list of {tool, change, before, after} entries: change is "added",
-    "removed", or "changed" (description/input_schema differs).
-    """
-    by_name_before = {t["name"]: t for t in (approved or [])}
-    by_name_after = {t["name"]: t for t in (current or [])}
-
-    diffs = []
-    for name in sorted(set(by_name_before) | set(by_name_after)):
-        before = by_name_before.get(name)
-        after = by_name_after.get(name)
-        if before is None:
-            diffs.append({"tool": name, "change": "added", "before": None, "after": after})
-        elif after is None:
-            diffs.append({"tool": name, "change": "removed", "before": before, "after": None})
-        elif before != after:
-            diffs.append({"tool": name, "change": "changed", "before": before, "after": after})
-    return diffs
-
-
 # ---------------------------------------------------------------------------
 # Local script file pinning
 # ---------------------------------------------------------------------------
@@ -229,18 +207,26 @@ def _resolve_candidate(candidate: str, server: "MCPServer") -> Optional[Path]:
 
     Tries relative to Tooldex's own process cwd first — that's how the
     actual spawn resolves a relative path, since StdioServerParameters sets
-    no explicit cwd of its own. But a relative path in someone's .mcp.json
-    is written relative to *that config file*, not to wherever `tooldex`
-    happens to be launched from — those are frequently different
-    directories. Falling back to the config's own directory means a
-    same-directory `"args": ["server.py"]` still resolves (and therefore
-    still gets pinned) even when tooldex was started from elsewhere.
+    no explicit cwd of its own. Falls back to two other bases, in order:
+
+    - `project_path` — for a project-scoped Claude Code server (parsed out
+      of ~/.claude.json's "projects" map), this is the actual project
+      directory a relative path is written against. `source_path` for
+      these entries is ~/.claude.json itself — a single flat file shared by
+      every project — so trying that instead would resolve into the user's
+      home directory, not the project, and silently never find the file.
+    - `source_path`'s own directory — correct for a project-local config
+      file (.mcp.json, .cursor/mcp.json, etc.), where a relative path is
+      naturally written relative to that file's own location, which is
+      frequently not wherever `tooldex` happens to be launched from.
     """
     p = Path(candidate)
     if p.is_file():
         return p
-    if server.source_path:
-        alt = Path(server.source_path).parent / candidate
+    for base in (server.project_path, server.source_path and str(Path(server.source_path).parent)):
+        if not base:
+            continue
+        alt = Path(base) / candidate
         if alt.is_file():
             return alt
     return None
@@ -384,7 +370,13 @@ def _file_still_matches(path_str: str, recorded: Optional[dict]) -> bool:
     answer rather than trusting mtime alone (which a bare `touch` or an
     editor's save-without-changes would otherwise misreport as "changed").
     """
-    if recorded is None:
+    if not isinstance(recorded, dict):
+        # Anything else — None (never recorded), or a bare hash string from
+        # before this {size, mtime, hash} shape existed — can't carry a
+        # size/mtime to fast-path against. Treat it as a mismatch rather
+        # than crash on it: same self-healing rule as elsewhere in this
+        # module, an old-format record is just treated as needing a fresh
+        # approval to re-baseline into the current shape.
         return False
     try:
         stat = Path(path_str).stat()

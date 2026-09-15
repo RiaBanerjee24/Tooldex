@@ -81,7 +81,6 @@ async def set_server_trust(server_id: str, body: TrustDecisionBody):
     new_status = "allowed" if body.decision == "allow" else "denied"
     manifest.servers[server_id] = server.model_copy(update={
         "trust_status": new_status,
-        "trust_diff": [],
     })
 
     return {"status": "ok", "trust_status": new_status}
@@ -106,7 +105,6 @@ async def revoke_server_trust(server_id: str):
     trust_store.remove_decision(server)
     manifest.servers[server_id] = server.model_copy(update={
         "trust_status": "pending",
-        "trust_diff": [],
         "discovered_tools": [],
         "probe_status": None,
         "probe_error": None,
@@ -129,6 +127,7 @@ async def rescan_server(server_id: str, force: bool = False):
     """
     from tooldex.core.discovery.tool_discovery import list_tools_for
     from tooldex.core.models.server import DiscoveredToolLite
+    from tooldex.core.discovery.to_manifest import _trust_status_for
 
     manifest = get_parser().manifest
     server = manifest.get_server(server_id)
@@ -158,6 +157,7 @@ async def rescan_server(server_id: str, force: bool = False):
         "discovered_tools": new_tools,
         "probe_status": result.status.value,
         "probe_error": result.error or None,
+        "trust_status": _trust_status_for(server, result),
     }
 
     from tooldex.scanner import security_scan_enabled

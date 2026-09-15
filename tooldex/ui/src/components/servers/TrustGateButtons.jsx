@@ -21,11 +21,10 @@ const linkStyle = {
 // list its tools. Mirrors RescanServerButton's anchored-popup pattern for
 // the (destructive-ish) revoke confirmation — this codebase has no modal
 // primitive, so an inline popup is the established convention.
-export function TrustGateButtons({ serverId, trustStatus, trustDiff, onDone }) {
+export function TrustGateButtons({ serverId, trustStatus, onDone }) {
     const [busy, setBusy] = useState(null) // null | "allow" | "deny" | "revoke"
     const [error, setError] = useState(false)
     const [confirmOpen, setConfirmOpen] = useState(false)
-    const [diffOpen, setDiffOpen] = useState(false)
     const [pos, setPos] = useState(null)
     const revokeBtnRef = useRef(null)
     const popRef = useRef(null)
@@ -114,24 +113,18 @@ export function TrustGateButtons({ serverId, trustStatus, trustDiff, onDone }) {
 
     if (trustStatus === "changed") {
         return (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <SecurityWarningIcon size={12} color="var(--yellow-muted)" />
-                    <span style={{ fontSize: 10, color: "var(--yellow-muted)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em" }}>
-                        tool list changed, needs fresh approval to get tool list
-                    </span>
-                    <button onClick={() => setDiffOpen(o => !o)} style={linkStyle}>
-                        {diffOpen ? "hide diff" : "review changes"}
-                    </button>
-                    <button
-                        onClick={() => decide("allow")}
-                        disabled={busy != null}
-                        style={btnStyle(busy === "allow" ? "var(--yellow-muted)" : "var(--lime)", "var(--lime-border)")}
-                    >
-                        {busy === "allow" ? "approving…" : "approve changes"}
-                    </button>
-                </div>
-                {diffOpen && <TrustDiff diff={trustDiff} />}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <SecurityWarningIcon size={12} color="var(--yellow-muted)" />
+                <span style={{ fontSize: 10, color: "var(--yellow-muted)", fontFamily: "Menlo, Consolas, monospace", letterSpacing: "0.04em" }}>
+                    tool list changed, needs fresh approval to get tool list
+                </span>
+                <button
+                    onClick={() => decide("allow")}
+                    disabled={busy != null}
+                    style={btnStyle(busy === "allow" ? "var(--yellow-muted)" : "var(--lime)", "var(--lime-border)")}
+                >
+                    {busy === "allow" ? "approving…" : "approve changes"}
+                </button>
             </div>
         )
     }
@@ -183,27 +176,3 @@ export function TrustGateButtons({ serverId, trustStatus, trustDiff, onDone }) {
     )
 }
 
-const DIFF_LABEL = { added: "+ added", removed: "− removed", changed: "~ changed" }
-const DIFF_COLOR = { added: "var(--lime)", removed: "var(--red)", changed: "var(--yellow-muted)" }
-
-function TrustDiff({ diff }) {
-    if (!diff?.length) return null
-    return (
-        <div style={{
-            background: "var(--surface2)", borderRadius: "var(--radius)",
-            border: "1px solid var(--border)", overflow: "hidden", width: "100%", maxWidth: 420,
-        }}>
-            {diff.map((d, i) => (
-                <div key={`${d.tool}-${i}`} style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "6px 10px",
-                    borderBottom: i < diff.length - 1 ? "1px solid var(--border)" : "none",
-                    fontSize: 10.5, fontFamily: "Menlo, Consolas, monospace",
-                }}>
-                    <span style={{ color: DIFF_COLOR[d.change], flexShrink: 0, minWidth: 62 }}>{DIFF_LABEL[d.change]}</span>
-                    <span style={{ color: "var(--cream)" }}>{d.tool}</span>
-                </div>
-            ))}
-        </div>
-    )
-}

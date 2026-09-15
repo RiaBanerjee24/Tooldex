@@ -291,6 +291,54 @@ class TestLocalScriptPinning:
         (tmp_path / "fs.py").write_text("print('modified')\n")
         assert trust_store.files_changed_since_approval(server) is True
 
+    def test_relative_path_resolves_via_project_path_for_claude_code_entries(self, tmp_path):
+        """A project-scoped Claude Code server (parsed out of the
+        "projects" map in ~/.claude.json) has source_path pointing at that
+        single shared ~/.claude.json file, not the project directory — a
+        relative script path must resolve against project_path instead, or
+        it's silently never found (and therefore never pinned)."""
+        project_dir = tmp_path / "myproject"
+        project_dir.mkdir()
+        (project_dir / "local_server.py").write_text("print('hi')\n")
+
+        server = MCPServer(
+            id="a:srv", name="srv", command="python3", args=["local_server.py"],
+            transport="stdio",
+            source_path=str(tmp_path / ".claude.json"),  # a different, unrelated directory
+            project_path=str(project_dir),
+        )
+        trust_store.set_decision(server, "allow")
+
+        recorded = trust_store._load()[trust_store.server_key(server)]["file_hashes"]
+        assert str(project_dir / "local_server.py") in recorded
+
+        (project_dir / "local_server.py").write_text("print('modified')\n")
+        assert trust_store.files_changed_since_approval(server) is True
+
+    def test_old_flat_string_hash_format_self_heals_instead_of_crashing(self, tmp_path):
+        """Before the stat-first optimization, file_hashes stored
+        {path: "hash_string"} — a plain string, not {size, mtime, hash}.
+        A real trust_store.json approved under that old code still has
+        entries in this shape; reading one must never crash, just treat it
+        as needing a fresh approval like any other stale/unrecognized
+        record."""
+        server = _script_server(tmp_path)
+        store = trust_store._load()
+        key = trust_store.server_key(server)
+        script_path = str((tmp_path / "fs.py").resolve())
+        store[key] = {
+            "decision": "allow", "server_name": server.name,
+            "approved_tools": None, "decided_at": 0, "updated_at": 0,
+            "file_hashes": {script_path: "deadbeef"},  # old flat-string shape
+        }
+        trust_store._save(store)
+
+        assert trust_store.files_changed_since_approval(server) is True  # must not raise
+        assert trust_store.get_decision(server) == "allow"
+
+        trust_store.set_decision(server, "allow")  # re-approve to migrate it
+        assert trust_store.files_changed_since_approval(server) is False
+
     def test_missing_script_after_approval_is_treated_as_changed(self, tmp_path):
         server = _script_server(tmp_path)
         trust_store.set_decision(server, "allow")
@@ -321,16 +369,3 @@ class TestLocalScriptPinning:
         assert trust_store.files_changed_since_approval(server) is False
 
 
-class TestDiffTools:
-    def test_added_removed_and_changed(self):
-        before = [{"name": "a", "description": "x", "input_schema": {}},
-                  {"name": "b", "description": "y", "input_schema": {}}]
-        after = [{"name": "a", "description": "x-new", "input_schema": {}},
-                 {"name": "c", "description": "z", "input_schema": {}}]
-        diff = trust_store.diff_tools(before, after)
-        by_tool = {d["tool"]: d["change"] for d in diff}
-        assert by_tool == {"a": "changed", "b": "removed", "c": "added"}
-
-    def test_identical_snapshots_produce_no_diff(self):
-        snap = [{"name": "a", "description": "x", "input_schema": {}}]
-        assert trust_store.diff_tools(snap, snap) == []

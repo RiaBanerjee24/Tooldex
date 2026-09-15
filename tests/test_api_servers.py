@@ -172,6 +172,28 @@ class TestRescanServerEndpoint:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_drift_flagged_on_single_server_rescan(self):
+        """Regression: rescan_server updated discovered_tools/probe_status
+        from a fresh probe but never recomputed trust_status, so a server
+        edited while Tooldex was running and then rescanned via the UI's
+        "rescan server" button never showed "changed" — the field just kept
+        whatever it was from the last full manifest rebuild."""
+        server = MCPServer(id="a:fs", name="fs", transport="stdio", command="python3", trust_status="allowed")
+        _install_manifest({"a:fs": server})
+        drifted_result = ToolDiscoveryResult(
+            server_id="a:fs", status=ToolDiscoveryStatus.FOUND,
+            tools=[DiscoveredTool(name="t1", server_id="a:fs", description="d")],
+            duration_ms=10, tools_changed=True,
+        )
+        with patch("tooldex.core.discovery.tool_discovery.list_tools_for", return_value=drifted_result), \
+             patch("tooldex.core.discovery.probe_cache.invalidate"), \
+             patch("tooldex.scanner.scan_servers", return_value={}):
+            await rescan_server("a:fs")
+
+        updated = get_parser().manifest.get_server("a:fs")
+        assert updated.trust_status == "changed"
+
+    @pytest.mark.asyncio
     async def test_reruns_yara_scan_by_default(self):
         server = MCPServer(id="a:fs", name="fs", transport="stdio", command="npx")
         _install_manifest({"a:fs": server})

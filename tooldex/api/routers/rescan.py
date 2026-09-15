@@ -92,6 +92,7 @@ async def rescan_stream(force: bool = False):
     from tooldex.core.discovery.mcp_client import probe_server
     from tooldex.core.parsers.parser import get_parser
     from tooldex.core.models.server import DiscoveredToolLite
+    from tooldex.core.discovery.to_manifest import _trust_status_for
     from tooldex.api.llm_jobs import running_llm_job_ids, abort_all_llm_jobs
 
     async def generate():
@@ -137,11 +138,13 @@ async def rescan_stream(force: bool = False):
                     )
                     for t in result.tools
                 ]
-                manifest_obj.servers[server.id] = manifest_obj.servers[server.id].model_copy(
+                current = manifest_obj.servers[server.id]
+                manifest_obj.servers[server.id] = current.model_copy(
                     update={
                         "discovered_tools": new_tools,
                         "probe_status": result.status.value,
                         "probe_error": result.error or None,
+                        "trust_status": _trust_status_for(current, result),
                     }
                 )
 

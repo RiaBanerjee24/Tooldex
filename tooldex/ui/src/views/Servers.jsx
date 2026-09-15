@@ -426,7 +426,6 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                                         <TrustGateButtons
                                             serverId={sel}
                                             trustStatus={detail.trust_status}
-                                            trustDiff={detail.trust_diff}
                                             onDone={() => { refetchDetail(); refetchList() }}
                                         />
                                         <RescanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
