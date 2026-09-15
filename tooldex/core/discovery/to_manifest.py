@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional
 
+import tooldex.core.discovery.trust_store as trust_store
 from tooldex.core.discovery.results import (
     ConfigDetectionResult,
     ToolDiscoveryResult,
@@ -37,6 +38,7 @@ def build_manifest(
                 "security_findings": security_findings,
                 "security_risk": security_risk,
                 "security_scanned": security_scanned,
+                "trust_status": _trust_status_for(server, result),
             }
         )
 
@@ -50,6 +52,27 @@ def build_manifest(
         all_tools=all_tools,
         server_agents_index={sid: [] for sid in servers},
     )
+
+
+def _trust_status_for(server: MCPServer, result: Optional[ToolDiscoveryResult]) -> Optional[str]:
+    """
+    Derive trust_status for one server.
+
+    Non-stdio transports aren't gated, so they're always None. A drifted
+    server (result.tools_changed) is reported as "changed" regardless of
+    the raw stored decision — the decision itself only flips back to plain
+    "allowed" once the user re-approves (which re-baselines it, see
+    trust_store.set_decision).
+    """
+    transport = (server.transport or "stdio").lower()
+    if transport != "stdio":
+        return None
+
+    if result is not None and result.tools_changed:
+        return "changed"
+
+    decision = trust_store.get_decision(server)
+    return {"allow": "allowed", "deny": "denied"}.get(decision, "pending")
 
 
 def _lite_tools_for(result: Optional[ToolDiscoveryResult]) -> list[DiscoveredToolLite]:

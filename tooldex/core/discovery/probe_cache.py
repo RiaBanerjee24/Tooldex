@@ -12,12 +12,13 @@ Use `invalidate(server)` to force a live probe on the next call.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
+
+from tooldex.core.discovery._fingerprint import server_key as _server_key
 
 if TYPE_CHECKING:
     from tooldex.core.discovery.results import ToolDiscoveryResult
@@ -28,20 +29,6 @@ logger = logging.getLogger("tooldex.discovery.cache")
 _CACHE_PATH = Path.home() / ".tooldex" / "probe_cache.json"
 DEFAULT_TTL: float = 300.0  # 5 minutes
 _MAX_ENTRIES = 2_000
-
-
-def _server_key(server: "MCPServer") -> str:
-    sig = json.dumps(
-        {
-            "command": server.command,
-            "args": list(server.args or []),
-            "url": str(server.url) if server.url else None,
-            "transport": server.transport,
-            "env_keys": sorted((server.env or {}).keys()),
-        },
-        sort_keys=True,
-    )
-    return hashlib.sha256(sig.encode()).hexdigest()[:20]
 
 
 def _load() -> dict:

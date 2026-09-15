@@ -12,11 +12,26 @@ async function get(path) {
     return res.json()
 }
 
-async function post(path) {
-    const res = await fetch(`${BASE}${path}`, { method: "POST" })
+async function post(path, body) {
+    const res = await fetch(`${BASE}${path}`, {
+        method: "POST",
+        ...(body !== undefined ? {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        } : {}),
+    })
     if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.error || body?.detail?.error || `${res.status} ${res.statusText} — ${path}`)
+        const errBody = await res.json().catch(() => null)
+        throw new Error(errBody?.error || errBody?.detail?.error || `${res.status} ${res.statusText} — ${path}`)
+    }
+    return res.json()
+}
+
+async function del(path) {
+    const res = await fetch(`${BASE}${path}`, { method: "DELETE" })
+    if (!res.ok) {
+        const errBody = await res.json().catch(() => null)
+        throw new Error(errBody?.error || errBody?.detail?.error || `${res.status} ${res.statusText} — ${path}`)
     }
     return res.json()
 }
@@ -36,4 +51,6 @@ export const api = {
     llmScanStatus: (id) => get(`/api/servers/${encodeURIComponent(id)}/llm-scan/status`),
     llmScanStop: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/stop`),
     llmInvalidateCache: (id) => post(`/api/servers/${encodeURIComponent(id)}/llm-scan/invalidate-cache`),
+    trustServer: (id, decision) => post(`/api/servers/${encodeURIComponent(id)}/trust`, { decision }),
+    revokeTrust: (id) => del(`/api/servers/${encodeURIComponent(id)}/trust`),
 }

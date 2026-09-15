@@ -35,6 +35,7 @@ markdown_extensions:
 
 nav:
   - Tooldex: index.md
+  - Release Notes: release-notes.md
 
 extra_css:
   - stylesheets/extra.css

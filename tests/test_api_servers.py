@@ -8,7 +8,8 @@ from fastapi.testclient import TestClient
 
 from tooldex.api.app import create_app
 from tooldex.api.redact import friendly_path, _is_sensitive_env, redact_server
-from tooldex.api.routers.servers import rescan_server
+from tooldex.api.routers.servers import rescan_server, revoke_server_trust, set_server_trust, TrustDecisionBody
+from tooldex.core.discovery import trust_store
 from tooldex.core.discovery.results import DiscoveredTool, ToolDiscoveryResult, ToolDiscoveryStatus
 from tooldex.core.models.manifest import TooldexManifest, TooldexMetadata
 from tooldex.core.models.server import DiscoveredToolLite, MCPServer
@@ -171,6 +172,28 @@ class TestRescanServerEndpoint:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
+    async def test_drift_flagged_on_single_server_rescan(self):
+        """Regression: rescan_server updated discovered_tools/probe_status
+        from a fresh probe but never recomputed trust_status, so a server
+        edited while Tooldex was running and then rescanned via the UI's
+        "rescan server" button never showed "changed" — the field just kept
+        whatever it was from the last full manifest rebuild."""
+        server = MCPServer(id="a:fs", name="fs", transport="stdio", command="python3", trust_status="allowed")
+        _install_manifest({"a:fs": server})
+        drifted_result = ToolDiscoveryResult(
+            server_id="a:fs", status=ToolDiscoveryStatus.FOUND,
+            tools=[DiscoveredTool(name="t1", server_id="a:fs", description="d")],
+            duration_ms=10, tools_changed=True,
+        )
+        with patch("tooldex.core.discovery.tool_discovery.list_tools_for", return_value=drifted_result), \
+             patch("tooldex.core.discovery.probe_cache.invalidate"), \
+             patch("tooldex.scanner.scan_servers", return_value={}):
+            await rescan_server("a:fs")
+
+        updated = get_parser().manifest.get_server("a:fs")
+        assert updated.trust_status == "changed"
+
+    @pytest.mark.asyncio
     async def test_reruns_yara_scan_by_default(self):
         server = MCPServer(id="a:fs", name="fs", transport="stdio", command="npx")
         _install_manifest({"a:fs": server})
@@ -245,6 +268,82 @@ class TestRescanServerEndpoint:
         mock_scan.assert_not_called()
         assert result["security_scanned"] is False
         assert "Security scan skipped" in capsys.readouterr().out
+
+
+class TestServerTrustEndpoints:
+    @pytest.fixture(autouse=True)
+    def isolated_trust_store(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(trust_store, "_STORE_PATH", tmp_path / "trust_store.json")
+
+    @pytest.mark.asyncio
+    async def test_approve_not_found_returns_404(self):
+        _install_manifest({})
+        with pytest.raises(HTTPException) as exc_info:
+            await set_server_trust("missing", TrustDecisionBody(decision="allow"))
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_invalid_decision_returns_400(self):
+        server = MCPServer(id="a:fs", name="fs", transport="stdio", command="npx")
+        _install_manifest({"a:fs": server})
+        with pytest.raises(HTTPException) as exc_info:
+            await set_server_trust("a:fs", TrustDecisionBody(decision="maybe"))
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_allow_persists_decision_and_invalidates_probe_cache(self):
+        server = MCPServer(id="a:fs", name="fs", transport="stdio", command="npx")
+        _install_manifest({"a:fs": server})
+        with patch("tooldex.core.discovery.probe_cache.invalidate") as mock_invalidate:
+            result = await set_server_trust("a:fs", TrustDecisionBody(decision="allow"))
+
+        assert result["trust_status"] == "allowed"
+        assert trust_store.get_decision(server) == "allow"
+        mock_invalidate.assert_called_once()
+        updated = get_parser().manifest.get_server("a:fs")
+        assert updated.trust_status == "allowed"
+
+    @pytest.mark.asyncio
+    async def test_deny_does_not_invalidate_probe_cache(self):
+        server = MCPServer(id="a:fs", name="fs", transport="stdio", command="npx")
+        _install_manifest({"a:fs": server})
+        with patch("tooldex.core.discovery.probe_cache.invalidate") as mock_invalidate:
+            result = await set_server_trust("a:fs", TrustDecisionBody(decision="deny"))
+
+        assert result["trust_status"] == "denied"
+        assert trust_store.get_decision(server) == "deny"
+        mock_invalidate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revoke_not_found_returns_404(self):
+        _install_manifest({})
+        with pytest.raises(HTTPException) as exc_info:
+            await revoke_server_trust("missing")
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_revoke_returns_to_pending_and_clears_stale_data(self):
+        server = MCPServer(
+            id="a:fs", name="fs", transport="stdio", command="npx",
+            discovered_tools=[DiscoveredToolLite(name="t1")],
+            security_findings=[{"tool_name": "t1", "severity": "HIGH"}],
+            security_risk="HIGH", security_scanned=True,
+            probe_status="found",
+        )
+        _install_manifest({"a:fs": server})
+        trust_store.set_decision(server, "allow")
+
+        result = await revoke_server_trust("a:fs")
+
+        assert result["trust_status"] == "pending"
+        assert trust_store.get_decision(server) is None
+        updated = get_parser().manifest.get_server("a:fs")
+        assert updated.trust_status == "pending"
+        assert updated.discovered_tools == []
+        assert updated.security_findings == []
+        assert updated.security_risk is None
+        assert updated.security_scanned is False
+        assert updated.probe_status is None
 
 
 class TestHealthEndpoint:

@@ -127,7 +127,7 @@ class TestRescanStreamEndpoint:
         probe_result = SimpleNamespace(
             server_id="a:srv", status=SimpleNamespace(value="found"),
             tools=[SimpleNamespace(name="t1", description="d", input_schema={})],
-            error=None, duration_ms=42,
+            error=None, duration_ms=42, tools_changed=False,
         )
         with patch("tooldex.api.llm_jobs.running_llm_job_ids", return_value=[]), \
              patch("tooldex.core.discovery.mcp_client.probe_server", new=AsyncMock(return_value=probe_result)):
@@ -146,3 +146,28 @@ class TestRescanStreamEndpoint:
         updated = get_parser().manifest.get_server("a:srv")
         assert len(updated.discovered_tools) == 1
         assert updated.probe_status == "found"
+        assert updated.trust_status == "pending"  # never approved in this test's isolated trust store
+
+    @pytest.mark.asyncio
+    async def test_drift_flagged_on_stream_rescan_not_just_initial_scan(self):
+        """Regression: rescan_stream patched the manifest per-result but
+        never recomputed trust_status, so a server that drifted while
+        Tooldex was already running never showed "changed" until the whole
+        manifest was rebuilt from scratch (a fresh `tooldex run` or the
+        non-streaming POST /rescan) — the UI's "rescan server"/"rescan all"
+        buttons drive this streaming path, so drift silently never surfaced
+        through the normal way anyone would actually notice it."""
+        server = MCPServer(id="a:srv", name="srv", transport="stdio", trust_status="allowed")
+        _install_manifest({"a:srv": server})
+
+        drifted_result = SimpleNamespace(
+            server_id="a:srv", status=SimpleNamespace(value="found"),
+            tools=[SimpleNamespace(name="t1", description="d", input_schema={})],
+            error=None, duration_ms=42, tools_changed=True,
+        )
+        with patch("tooldex.api.llm_jobs.running_llm_job_ids", return_value=[]), \
+             patch("tooldex.core.discovery.mcp_client.probe_server", new=AsyncMock(return_value=drifted_result)):
+            await _collect_sse(await rescan_module.rescan_stream(force=False))
+
+        updated = get_parser().manifest.get_server("a:srv")
+        assert updated.trust_status == "changed"

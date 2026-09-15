@@ -7,9 +7,11 @@ real MCP clients or the network.
 import json as jsonlib
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from tooldex import cli as cli_module
+from tooldex.core.discovery import trust_store
 from tooldex.core.discovery.results import ConfigDetectionResult, ToolDiscoveryResult, ToolDiscoveryStatus
 from tooldex.core.models.server import MCPServer
 
@@ -207,3 +209,158 @@ class TestNoServeMode:
 
         probed = mock_probe.call_args[0][0]
         assert [s.name for s in probed] == ["gh"]
+
+
+class TestTrustGateCli:
+    @pytest.fixture(autouse=True)
+    def isolated_trust_store(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(trust_store, "_STORE_PATH", tmp_path / "trust_store.json")
+
+    def test_trust_all_stdio_approves_pending_servers_before_probing(self):
+        server = MCPServer(id="custom:fs", name="fs", command="npx", args=["-y", "pkg"], transport="stdio")
+        config = ConfigDetectionResult(servers={"custom:fs": server})
+        patches = _patched(detect_all=patch.object(cli_module, "detect_all", return_value=config))
+        with patches["load_prefs"], patches["detect_all"], \
+             patches["list_tools_for_all"] as mock_probe, \
+             patches["scan_servers"], patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve", "--trust-all-stdio"])
+
+        assert result.exit_code == 0, result.stdout
+        assert trust_store.get_decision(server) == "allow"
+        mock_probe.assert_called_once()
+
+    def test_trust_all_stdio_does_not_prompt_and_is_noninteractive_safe(self):
+        # CliRunner's stdin isn't a tty, so `interactive` is already False here —
+        # this just confirms --trust-all-stdio doesn't depend on that at all.
+        server = MCPServer(id="custom:fs", name="fs", command="npx", transport="stdio")
+        config = ConfigDetectionResult(servers={"custom:fs": server})
+        patches = _patched(detect_all=patch.object(cli_module, "detect_all", return_value=config))
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"], patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve", "--trust-all-stdio"])
+
+        assert result.exit_code == 0, result.stdout
+
+    def test_reset_trust_clears_prior_decision_for_named_server(self):
+        server = MCPServer(id="custom:fs", name="fs", command="npx", transport="stdio")
+        trust_store.set_decision(server, "deny")
+        config = ConfigDetectionResult(servers={"custom:fs": server})
+        patches = _patched(detect_all=patch.object(cli_module, "detect_all", return_value=config))
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"], patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            result = runner.invoke(cli_module.cli, ["run", "--no-serve", "--reset-trust", "fs"])
+
+        assert result.exit_code == 0, result.stdout
+        assert trust_store.get_decision(server) is None
+
+    def test_pending_stdio_server_not_probed_without_trust_all_flag(self):
+        # Non-interactive (CliRunner stdin isn't a tty) and no --trust-all-stdio:
+        # the real list_tools_for_all/probe_server would fail this server closed.
+        # Here list_tools_for_all is mocked, so this just proves nothing in `run`
+        # auto-approves a pending server on its own.
+        server = MCPServer(id="custom:fs", name="fs", command="npx", transport="stdio")
+        config = ConfigDetectionResult(servers={"custom:fs": server})
+        patches = _patched(detect_all=patch.object(cli_module, "detect_all", return_value=config))
+        with patches["load_prefs"], patches["detect_all"], patches["list_tools_for_all"], \
+             patches["scan_servers"], patches["hydrate_llm_cache"], \
+             patches["store_discovery_sources"], patches["init_parser_from_manifest"], \
+             patches["uvicorn_run"]:
+            runner.invoke(cli_module.cli, ["run", "--no-serve"])
+
+        assert trust_store.get_decision(server) is None
+
+
+class TestResolveStdioTrust:
+    """Direct unit tests for cli._resolve_stdio_trust's prompt-batching logic.
+
+    Simulating a real interactive terminal through CliRunner is unreliable
+    (sys.stdin.isatty() is False under Click's isolation regardless of
+    patching), so this exercises the function directly instead, patching
+    typer.prompt for canned input.
+    """
+
+    @pytest.fixture(autouse=True)
+    def isolated_trust_store(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(trust_store, "_STORE_PATH", tmp_path / "trust_store.json")
+
+    def _server(self, name, **overrides):
+        defaults = dict(id=f"custom:{name}", name=name, command="npx", args=["-y", name], transport="stdio")
+        defaults.update(overrides)
+        return MCPServer(**defaults)
+
+    def test_no_pending_servers_never_prompts(self, monkeypatch):
+        s = self._server("fs")
+        trust_store.set_decision(s, "allow")
+        mock_prompt = patch.object(cli_module.typer, "prompt")
+        with mock_prompt as prompt_fn:
+            cli_module._resolve_stdio_trust([s])
+        prompt_fn.assert_not_called()
+
+    def test_choice_1_approves_only_that_server(self):
+        s1, s2 = self._server("one"), self._server("two")
+        with patch.object(cli_module.typer, "prompt", return_value="1"):
+            cli_module._resolve_stdio_trust([s1, s2])
+        assert trust_store.get_decision(s1) == "allow"
+        assert trust_store.get_decision(s2) == "allow"
+
+    def test_choice_3_denies_only_that_server(self):
+        s1 = self._server("one")
+        with patch.object(cli_module.typer, "prompt", return_value="3"):
+            cli_module._resolve_stdio_trust([s1])
+        assert trust_store.get_decision(s1) == "deny"
+
+    def test_choice_2_batches_allow_for_remaining_pending_without_reprompting(self):
+        s1, s2, s3 = self._server("one"), self._server("two"), self._server("three")
+        with patch.object(cli_module.typer, "prompt", return_value="2") as prompt_fn:
+            cli_module._resolve_stdio_trust([s1, s2, s3])
+        prompt_fn.assert_called_once()
+        assert trust_store.get_decision(s1) == "allow"
+        assert trust_store.get_decision(s2) == "allow"
+        assert trust_store.get_decision(s3) == "allow"
+
+    def test_invalid_choice_reprompts_until_valid(self):
+        s1 = self._server("one")
+        with patch.object(cli_module.typer, "prompt", side_effect=["bogus", "1"]) as prompt_fn:
+            cli_module._resolve_stdio_trust([s1])
+        assert prompt_fn.call_count == 2
+        assert trust_store.get_decision(s1) == "allow"
+
+    def test_choice_4_no_longer_exists(self):
+        """Only 3 options now: Yes / Yes-for-all-stdio-servers / No — an
+        input of "4" must keep reprompting like any other invalid choice."""
+        s1 = self._server("one")
+        with patch.object(cli_module.typer, "prompt", side_effect=["4", "3"]) as prompt_fn:
+            cli_module._resolve_stdio_trust([s1])
+        assert prompt_fn.call_count == 2
+        assert trust_store.get_decision(s1) == "deny"
+
+    def test_file_changed_since_approval_is_never_reprompted_here(self, tmp_path):
+        """A server that's approved but whose script has since changed is
+        NOT pending (get_decision still returns "allow") — it's handled
+        entirely by mcp_client.probe_server (serve stale tools, flag
+        "changed"), never by re-entering this interactive prompt loop."""
+        script = tmp_path / "fs.py"
+        script.write_text("print('hi')\n")
+        s = MCPServer(id="a:fs", name="fs", command="python3", args=[str(script)], transport="stdio")
+        trust_store.set_decision(s, "allow")
+        script.write_text("print('modified')\n")
+        assert trust_store.files_changed_since_approval(s) is True
+
+        with patch.object(cli_module.typer, "prompt") as prompt_fn:
+            cli_module._resolve_stdio_trust([s])
+
+        prompt_fn.assert_not_called()
+        assert trust_store.get_decision(s) == "allow"
+
+    def test_already_decided_servers_are_skipped(self):
+        s1 = self._server("one")
+        trust_store.set_decision(s1, "allow")
+        with patch.object(cli_module.typer, "prompt") as prompt_fn:
+            cli_module._resolve_stdio_trust([s1])
+        prompt_fn.assert_not_called()

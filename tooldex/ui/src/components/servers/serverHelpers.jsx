@@ -124,6 +124,7 @@ const SHOW_STATUS = new Set(["failed", "disabled"])
 
 // probe_status is the ground truth; fall back to connection_status for YAML-only manifests
 export function effectiveStatus(s) {
+    if (s.probe_status === "not_trusted") return null  // TrustStatusBadge already explains this — not a connection failure
     if (s.probe_status != null) return s.probe_status === "found" ? null : "failed"
     return s.connection_status || null
 }
@@ -131,6 +132,31 @@ export function effectiveStatus(s) {
 export function ConnectionStatusBadge({ status }) {
     if (!status || !SHOW_STATUS.has(status)) return null
     const c = CONNECTION_STATUS[status]
+    if (!c) return null
+    return (
+        <span style={{
+            padding: "1px 6px", borderRadius: 3,
+            border: `1px solid ${c.border}`,
+            fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase",
+            color: c.color, background: c.bg,
+            fontFamily: "Menlo, Consolas, monospace", flexShrink: 0,
+        }}>{c.label}</span>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Trust status badge — approval gate for stdio servers (see TrustGateButtons)
+// ---------------------------------------------------------------------------
+
+const TRUST_STATUS = {
+    pending: { label: "pending approval", color: "var(--text3)",        bg: "var(--surface2)",   border: "var(--border)" },
+    allowed: { label: "approved",         color: "var(--lime)",         bg: "var(--lime-bg)",    border: "var(--lime-border)" },
+    denied:  { label: "declined",         color: "var(--red)",          bg: "var(--red-bg)",     border: "var(--red-border)" },
+    changed: { label: "changed",          color: "var(--yellow-muted)", bg: "var(--orange-bg)",  border: "var(--orange-border)" },
+}
+
+export function TrustStatusBadge({ status }) {
+    const c = TRUST_STATUS[status]
     if (!c) return null
     return (
         <span style={{

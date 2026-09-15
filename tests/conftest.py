@@ -30,6 +30,16 @@ def isolated_llm_cache(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def isolated_trust_store(tmp_path, monkeypatch):
+    """Never touch the user's real ~/.tooldex/trust_store.json — every test
+    gets its own throwaway file, applied globally so a test that forgets to
+    mock trust_store explicitly (or only patches some of its functions)
+    can't fall through to real, potentially large, real-world trust data."""
+    from tooldex.core.discovery import trust_store
+    monkeypatch.setattr(trust_store, "_STORE_PATH", tmp_path / "trust_store.json")
+
+
+@pytest.fixture(autouse=True)
 def reset_llm_jobs():
     """The in-memory LLM-judge job tracker in api/llm_jobs.py is global,
     mutable process state. Reset it around every test."""

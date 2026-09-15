@@ -7,6 +7,7 @@ import { DownloadReport } from "../components/DownloadReport.jsx"
 import { DownloadServerReport } from "../components/servers/DownloadServerReport.jsx"
 import { CopyConfigButton } from "../components/servers/CopyConfigButton.jsx"
 import { RescanServerButton } from "../components/servers/RescanServerButton.jsx"
+import { TrustGateButtons } from "../components/servers/TrustGateButtons.jsx"
 import { LlmScanServerButton } from "../components/servers/LlmScanServerButton.jsx"
 import { ServerSidebarList } from "../components/servers/ServerSidebarList.jsx"
 import { ToolsPanel } from "../components/servers/ToolsPanel.jsx"
@@ -422,6 +423,11 @@ export function Servers({ initialSel, scanKey = 0, onRescan, rescanState = "idle
                                     </h2>
                                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexShrink: 0 }}>
                                         <ConnectionStatusBadge status={effectiveStatus(detail)} />
+                                        <TrustGateButtons
+                                            serverId={sel}
+                                            trustStatus={detail.trust_status}
+                                            onDone={() => { refetchDetail(); refetchList() }}
+                                        />
                                         <RescanServerButton serverId={sel} onDone={() => { refetchDetail(); refetchList() }} />
                                         <CopyConfigButton detail={detail} />
                                         {detail.discovered_tools?.length > 0 && (

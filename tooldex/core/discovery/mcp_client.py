@@ -30,6 +30,7 @@ from tooldex.core.discovery.results import (
     ToolDiscoveryResult,
     ToolDiscoveryStatus,
 )
+import tooldex.core.discovery.trust_store as trust_store
 from tooldex.core.models.server import MCPServer
 
 logger = logging.getLogger("tooldex.discovery.mcp_client")
@@ -70,7 +71,39 @@ async def probe_server(
     transport = (server.transport or "stdio").lower()
 
     if transport == "stdio":
-        return await _probe_with_timeout(_probe_stdio, server, timeout)
+        if trust_store.get_decision(server) != "allow":
+            return ToolDiscoveryResult(
+                server_id=server.id,
+                status=ToolDiscoveryStatus.NOT_TRUSTED,
+                error="Server not approved to run — approve it first.",
+            )
+
+        if trust_store.files_changed_since_approval(server):
+            # Approved once, but its local script no longer hashes the same —
+            # never execute it on the strength of a stale approval. Serve the
+            # last-known tool list (from before the edit) instead of nothing,
+            # flagged as changed, exactly like a tools/list drift detected the
+            # ordinary way — re-approving is what accepts the new file as the
+            # new baseline (trust_store.set_decision resets approved_tools).
+            stale = trust_store.get_approved_tools(server) or []
+            return ToolDiscoveryResult(
+                server_id=server.id,
+                status=ToolDiscoveryStatus.FOUND,
+                tools=[
+                    DiscoveredTool(
+                        name=t["name"], server_id=server.id,
+                        description=t.get("description"), input_schema=t.get("input_schema"),
+                    )
+                    for t in stale
+                ],
+                tools_changed=True,
+                error="Tool list changed since approval — needs fresh approval to get the live tool list.",
+            )
+
+        result = await _probe_with_timeout(_probe_stdio, server, timeout)
+        if result.ok:
+            result.tools_changed = trust_store.record_probe_result(server, result.tools)
+        return result
 
     if transport in ("http", "sse"):
         probe_fn = _probe_http if transport == "http" else _probe_sse
